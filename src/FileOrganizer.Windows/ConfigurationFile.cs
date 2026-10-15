@@ -16,10 +16,20 @@ public sealed class ConfigurationFile
     public string Path { get; }
     public string Text { get; private set; } = "";
     public ConfigurationFile(string path) { Path = System.IO.Path.GetFullPath(path); }
+    public static string ReadSharedText(string path)
+    {
+        using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using StreamReader reader = new(stream, Encoding.UTF8, true); return reader.ReadToEnd();
+    }
+    private static byte[] ReadSharedBytes(string path)
+    {
+        using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using MemoryStream bytes = new(); stream.CopyTo(bytes); return bytes.ToArray();
+    }
     public ConfigurationDocument Open()
     {
         Paths.NoReparse(Path);
-        byte[] bytes = File.ReadAllBytes(Path);
+        byte[] bytes = ReadSharedBytes(Path);
         using MemoryStream memory = new(bytes);
         using StreamReader reader = new(memory, new UTF8Encoding(false, true), true);
         Text = reader.ReadToEnd(); encoding = reader.CurrentEncoding;
@@ -32,7 +42,7 @@ public sealed class ConfigurationFile
     {
         Paths.NoReparse(Path);
         if (baseline is null) return File.Exists(Path);
-        return !File.Exists(Path) || !CryptographicOperations.FixedTimeEquals(SHA256.HashData(baseline), SHA256.HashData(File.ReadAllBytes(Path)));
+        return !File.Exists(Path) || !CryptographicOperations.FixedTimeEquals(SHA256.HashData(baseline), SHA256.HashData(ReadSharedBytes(Path)));
     }
     public void Save(string text, Action? beforeCommit = null)
     {

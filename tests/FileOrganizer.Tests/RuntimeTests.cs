@@ -4,6 +4,7 @@ using Xunit;
 
 namespace FileOrganizer.Tests;
 
+[Collection("User instance lease")]
 public sealed class RuntimeTests
 {
     [WindowsFact]
@@ -108,7 +109,7 @@ public sealed class RuntimeTests
         FakeStartup store = new();
         string executable = Path.Combine(f.Root, "folder with spaces", "FileOrganizer.exe");
         StartupRegistration.Install(store, executable, f.ConfigPath);
-        Assert.Equal($"\"{executable}\" run --config \"{f.ConfigPath}\"", store.Values[StartupRegistration.EntryName(f.ConfigPath)]);
+        Assert.Equal($"\"{executable}\" run --background --config \"{f.ConfigPath}\"", store.Values[StartupRegistration.EntryName(f.ConfigPath)]);
         store.Values.Add("unrelated", "keep");
         StartupRegistration.Uninstall(store, f.ConfigPath);
         Assert.Single(store.Values); Assert.Equal("keep", store.Values["unrelated"]);
@@ -126,15 +127,24 @@ public sealed class RuntimeTests
         Assert.All(Directory.GetFiles(directory), path => Assert.True(new FileInfo(path).Length <= 256));
     }
     [WindowsFact]
-    public void T26_SingleInstanceReleasedAndConfigScoped()
+    public async Task T26_SingleInstanceAcrossConfigsAndSafeStop()
     {
+        if (!OperatingSystem.IsWindows()) return;
         using Fixture f = new();
         using (InstanceLease first = new(f.ConfigPath))
         {
             Assert.Throws<IOException>(() => new InstanceLease(f.ConfigPath.ToUpperInvariant()));
-            using InstanceLease different = new(Path.Combine(f.Root, "different.toml"));
+            Assert.Throws<IOException>(() => new InstanceLease(Path.Combine(f.Root, "different.toml")));
+            Assert.True(InstanceLease.RequestStop());
+            await Fixture.Eventually(() => first.StopRequested.IsCancellationRequested);
         }
-        using InstanceLease reopened = new(f.ConfigPath);
+        using (InstanceLease reopened = new(f.ConfigPath)) Assert.False(reopened.StopRequested.IsCancellationRequested);
+        Assert.False(InstanceLease.RequestStop());
+        string legacyName = @"Local\FileOrganizer-" + System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value + "-" + StartupRegistration.Identity(f.ConfigPath);
+        using Mutex legacy = new(false, legacyName);
+        Assert.True(legacy.WaitOne(0));
+        try { Assert.Throws<IOException>(() => new InstanceLease(f.ConfigPath)); }
+        finally { legacy.ReleaseMutex(); }
     }
     [WindowsFact]
     public async Task T17_DirectoryCannotBeRedirectedDuringCommit()

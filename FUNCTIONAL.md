@@ -139,3 +139,13 @@ ON_SHUTDOWN:
 ## Not guaranteed
 
 File readiness heuristics cannot prove an arbitrary writer has closed its last handle. Hard links, network shares, reparse points, concurrent external file modifications and power loss introduce platform-specific limits. Fail closed when verification is ambiguous; document residual risks rather than claiming absolute atomicity.
+
+## F-10 — Seven-day move history and undo
+
+Prepare and flush the record only for actual moves (not dry run, already-placed files, skipped collisions or duplicate deletion). Preserve final collision names and stream the source digest while its handle denies modification. A copied target's identity is recorded before commit. Commit metadata after the same safe transfer used by normal processing. A journal failure stops the worker. Only a partial final record with the known writer prefix may be discarded; malformed complete records fail closed.
+
+Undo acquires the per-user instance lease after the GUI requests safe shutdown. Replay current records for seven days, reject changed/replaced/missing destinations and occupied original paths, flush UndoPrepared, transfer without replacement, and append Undone. Undo newest first and refresh predecessor identities for movement chains, including cross-volume copies. Verify interrupted operations by identity and digest before completing their metadata; ambiguous double-copy cases are preserved. No history is used by rule matching.
+
+## F-11 — Configuration display synchronization
+
+The editor keeps a draft and an independently verified disk summary. File events and window activation refresh disk state; clean drafts reload automatically, dirty drafts retain their contents and disable overwrite. After saving, reopen the actual file. The worker publishes atomic diagnostic snapshots for accepted configuration text and rejected reloads. The GUI verifies process start identity and compares text hashes, showing disk and applied recursive flags separately. Unknown/missing state is explicit. History refresh is event-notified and user-triggered; there is no idle polling.

@@ -6,13 +6,13 @@ namespace FileOrganizer.Windows;
 
 public enum TransferOutcome { Moved, Skipped, DeletedIdentical, DryRun, AlreadyPlaced }
 
-public sealed class SafeTransfer(Action<LogLevel, string> log)
+public sealed class SafeTransfer(Action<LogLevel, string> log, MoveHistory? history = null, string? configPath = null)
 {
     // Force-copy and the pre-commit hook provide deterministic transaction fault tests.
     public async Task<TransferOutcome> ExecuteAsync(Configuration config, Folder folder, Rule rule, string source,
         CancellationToken cancellationToken = default, bool forceCopy = false, Action? beforeCommit = null, ManagedDirectories? managed = null)
     {
-        source = Paths.Normalize(source);
+        source = Paths.NormalizeLiteral(source);
         managed ??= new ManagedDirectories(config);
         if (!ReferenceEquals(managed.Configuration, config) || !ReferenceEquals(managed.Owner(source), folder))
             throw new IOException("Source outside the monitor's managed scope: " + source);
@@ -61,28 +61,44 @@ public sealed class SafeTransfer(Action<LogLevel, string> log)
                 string suffix = identical ? folder.Duplicates.CopySuffix : "_{n}";
                 target = Available(rule.Destination, Path.GetFileNameWithoutExtension(source), Path.GetExtension(source), suffix);
             }
+            MoveRecord? movement = null;
             try
             {
                 Rule? routed = Matching.First(folder, target);
                 if (routed is null || !Paths.Comparer.Equals(routed.Destination, rule.Destination))
                     throw new ConfigException("Collision suffix would change rule routing; source preserved: " + source);
-                if (!forceCopy && sourceInfo.Volume == destinationVolume)
+                if (history is not null) movement = await history.PrepareAsync(configPath ?? throw new IOException("History requires the config path"), source, target, input, sourceInfo, cancellationToken);
+                bool copied = await MoveLockedAsync(input, sourceHandle, target, sourceInfo.Volume, destinationVolume, cancellationToken, beforeCommit, forceCopy,
+                    copiedInfo => { if (movement is not null) movement = history!.SetDestination(movement, copiedInfo); });
+                if (movement is not null)
                 {
-                    beforeCommit?.Invoke();
-                    try { NativeFiles.Rename(sourceHandle, target); }
-                    catch (IOException exception) when ((exception.HResult & 0xffff) == 17)
-                    { await CopyCommitAsync(input, sourceHandle, target, cancellationToken, beforeCommit); }
+                    if (!copied) history!.Commit(movement, NativeFiles.Info(sourceHandle));
+                    else { using SafeFileHandle final = NativeFiles.Open(target, false); history!.Commit(movement, NativeFiles.Info(final)); }
                 }
-                else await CopyCommitAsync(input, sourceHandle, target, cancellationToken, beforeCommit);
                 log(LogLevel.Info, $"Moved: {source} -> {target}");
                 return TransferOutcome.Moved;
             }
             catch (IOException exception) when ((exception.HResult & 0xffff) is 80 or 183)
             {
+                if (movement is not null) history!.Abort(movement);
                 log(LogLevel.Debug, "Target claimed concurrently; resolving again: " + target);
             }
         }
         throw new IOException("Collision retry limit reached for " + source);
+    }
+
+    internal static async Task<bool> MoveLockedAsync(FileStream input, SafeFileHandle sourceHandle, string target,
+        uint sourceVolume, uint destinationVolume, CancellationToken token, Action? beforeCommit = null,
+        bool forceCopy = false, Action<NativeFiles.Information>? prepareCopy = null)
+    {
+        if (!forceCopy && sourceVolume == destinationVolume)
+        {
+            token.ThrowIfCancellationRequested(); beforeCommit?.Invoke();
+            try { NativeFiles.Rename(sourceHandle, target); return false; }
+            catch (IOException exception) when ((exception.HResult & 0xffff) == 17) { }
+        }
+        await CopyCommitAsync(input, sourceHandle, target, token, beforeCommit, prepareCopy);
+        return true;
     }
 
     private static async Task<SafeFileHandle> OpenCollisionAsync(string path, CancellationToken token)
@@ -121,7 +137,7 @@ public sealed class SafeTransfer(Action<LogLevel, string> log)
         return CryptographicOperations.FixedTimeEquals(first, second);
     }
     private static async Task CopyCommitAsync(FileStream input, SafeFileHandle sourceHandle, string target,
-        CancellationToken token, Action? beforeCommit)
+        CancellationToken token, Action? beforeCommit, Action<NativeFiles.Information>? prepareCopy)
     {
         string temp = Path.Combine(Path.GetDirectoryName(target)!, ".fileorganizer-" + Guid.NewGuid().ToString("N") + ".tmp");
         using SafeFileHandle tempHandle = NativeFiles.CreateNew(temp);
@@ -135,6 +151,7 @@ public sealed class SafeTransfer(Action<LogLevel, string> log)
             if (!await IdenticalAsync(input, output, token)) throw new IOException("Cross-volume verification failed");
             token.ThrowIfCancellationRequested();
             beforeCommit?.Invoke();
+            prepareCopy?.Invoke(NativeFiles.Info(tempHandle));
             NativeFiles.Rename(tempHandle, target);
             owned = false;
             NativeFiles.Delete(sourceHandle);

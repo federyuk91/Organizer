@@ -21,12 +21,14 @@ try {
     & $exe scan --config $config
     if ($LASTEXITCODE -ne 0) { throw 'Dry-run scan failed' }
     if (!(Test-Path (Join-Path $source 'test.png')) -or (Test-Path (Join-Path $source 'Images'))) { throw 'Dry run mutated files' }
-    $process = Start-Process -FilePath $exe -ArgumentList @('run', '--config', "`"$config`"") -WindowStyle Hidden -PassThru -RedirectStandardError (Join-Path $fixture 'stderr.txt') -RedirectStandardOutput (Join-Path $fixture 'stdout.txt')
+    $process = Start-Process -FilePath $exe -ArgumentList @('run', '--background', '--config', "`"$config`"") -WindowStyle Hidden -PassThru -RedirectStandardError (Join-Path $fixture 'stderr.txt') -RedirectStandardOutput (Join-Path $fixture 'stdout.txt')
     # Warm up only the verification process; production has no idle polling loop.
     Start-Sleep -Seconds 2
     $process.Refresh()
     if ($process.HasExited) { throw 'Worker exited during startup' }
-    $duplicate = Start-Process -FilePath $exe -ArgumentList @('run', '--config', "`"$config`"") -WindowStyle Hidden -PassThru -RedirectStandardError (Join-Path $fixture 'duplicate.txt')
+    $otherConfig = Join-Path $fixture 'different-config.toml'
+    Copy-Item -LiteralPath $config -Destination $otherConfig
+    $duplicate = Start-Process -FilePath $exe -ArgumentList @('run', '--config', "`"$otherConfig`"") -WindowStyle Hidden -PassThru -RedirectStandardError (Join-Path $fixture 'duplicate.txt')
     if (!$duplicate.WaitForExit(5000)) { Stop-Process -Id $duplicate.Id -Force; throw 'Second instance was not refused' }
     if ($duplicate.ExitCode -ne 3) { throw 'Second instance returned an unexpected exit code' }
     $cpuBefore = $process.TotalProcessorTime.TotalMilliseconds
@@ -44,6 +46,9 @@ try {
         WorkingSetBytes = $process.WorkingSet64
     }
     $result | ConvertTo-Json | Tee-Object -FilePath (Join-Path $root "artifacts/verification-$($Mode.ToLowerInvariant()).json")
+    & $exe stop
+    if ($LASTEXITCODE -ne 0 -or !$process.WaitForExit(10000)) { throw 'Graceful background shutdown failed' }
+    if ($process.ExitCode -notin @(0,130)) { throw 'Background worker failed during shutdown' }
 }
 finally {
     if ($process -and !$process.HasExited) { Stop-Process -Id $process.Id -Force; $process.WaitForExit() }

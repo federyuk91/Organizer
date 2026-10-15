@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.0.1"
+  #define AppVersion "1.1.0"
 #endif
 #ifndef PayloadDir
   #error PayloadDir must point to the staged installer payload.
@@ -44,6 +44,7 @@ Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 Name: "{group}\File Organizer"; Filename: "{app}\FileOrganizer.Configurator.exe"; WorkingDir: "{app}"; IconFilename: "{app}\FileOrganizer.ico"
 Name: "{group}\Avvia organizzazione"; Filename: "{app}\engine\FileOrganizer.exe"; Parameters: "run"; WorkingDir: "{app}"; IconFilename: "{app}\FileOrganizer.ico"
 Name: "{group}\Scansione adesso"; Filename: "{app}\engine\FileOrganizer.exe"; Parameters: "scan"; WorkingDir: "{app}"; IconFilename: "{app}\FileOrganizer.ico"
+Name: "{group}\Arresta organizzazione"; Filename: "{app}\engine\FileOrganizer.exe"; Parameters: "stop"; WorkingDir: "{app}"; IconFilename: "{app}\FileOrganizer.ico"
 Name: "{group}\Disinstalla File Organizer"; Filename: "{uninstallexe}"; IconFilename: "{app}\FileOrganizer.ico"
 Name: "{autodesktop}\File Organizer"; Filename: "{app}\FileOrganizer.Configurator.exe"; Tasks: desktopicon; IconFilename: "{app}\FileOrganizer.ico"
 
@@ -51,21 +52,43 @@ Name: "{autodesktop}\File Organizer"; Filename: "{app}\FileOrganizer.Configurato
 Filename: "{app}\FileOrganizer.Configurator.exe"; Description: "{cm:LaunchProgram,File Organizer}"; Flags: nowait postinstall skipifsilent unchecked
 
 [Code]
-// Remove only this installation's autorun commands; preserve all configurations and data.
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+procedure CurStepChanged(CurStep: TSetupStep);
 var
   Names: TArrayOfString;
-  Command, Prefix, RunKey: String;
+  Command, Prefix, Replacement, RunKey: String;
   Index: Integer;
 begin
-  if CurUninstallStep <> usUninstall then Exit;
+  if CurStep <> ssPostInstall then Exit;
   RunKey := 'Software\Microsoft\Windows\CurrentVersion\Run';
   Prefix := '"' + ExpandConstant('{app}\engine\FileOrganizer.exe') + '" run --config "';
+  Replacement := '"' + ExpandConstant('{app}\engine\FileOrganizer.exe') + '" run --background --config "';
   if RegGetValueNames(HKCU, RunKey, Names) then
     for Index := 0 to GetArrayLength(Names) - 1 do
       if (Pos('FileOrganizer-', Names[Index]) = 1) and
          RegQueryStringValue(HKCU, RunKey, Names[Index], Command) then
         if (CompareText(Copy(Command, 1, Length(Prefix)), Prefix) = 0) and
+           (Copy(Command, Length(Command), 1) = '"') then
+          if not RegWriteStringValue(HKCU, RunKey, Names[Index], Replacement + Copy(Command, Length(Prefix) + 1, Length(Command))) then
+            Log('Could not update autorun to background mode: ' + Names[Index]);
+end;
+
+// Remove only this installation's autorun commands; preserve all configurations and data.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Names: TArrayOfString;
+  Command, Prefix, BackgroundPrefix, RunKey: String;
+  Index: Integer;
+begin
+  if CurUninstallStep <> usUninstall then Exit;
+  RunKey := 'Software\Microsoft\Windows\CurrentVersion\Run';
+  Prefix := '"' + ExpandConstant('{app}\engine\FileOrganizer.exe') + '" run --config "';
+  BackgroundPrefix := '"' + ExpandConstant('{app}\engine\FileOrganizer.exe') + '" run --background --config "';
+  if RegGetValueNames(HKCU, RunKey, Names) then
+    for Index := 0 to GetArrayLength(Names) - 1 do
+      if (Pos('FileOrganizer-', Names[Index]) = 1) and
+         RegQueryStringValue(HKCU, RunKey, Names[Index], Command) then
+        if ((CompareText(Copy(Command, 1, Length(Prefix)), Prefix) = 0) or
+            (CompareText(Copy(Command, 1, Length(BackgroundPrefix)), BackgroundPrefix) = 0)) and
            (Copy(Command, Length(Command), 1) = '"') then
           if not RegDeleteValue(HKCU, RunKey, Names[Index]) then
             Log('Could not remove autorun value: ' + Names[Index]);

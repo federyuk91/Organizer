@@ -8,10 +8,10 @@ public partial class MainWindow : Window
 {
     private readonly EditorViewModel editor;
     private readonly string? initialPath;
-    public MainWindow(string? configPath = null)
+    public MainWindow(string? configPath = null, FileOrganizer.Windows.MoveHistory? history = null, FileOrganizer.Windows.EngineStateStore? states = null)
     {
         InitializeComponent(); initialPath = configPath;
-        editor = new EditorViewModel(this); DataContext = editor;
+        editor = new EditorViewModel(this, history: history, states: states); DataContext = editor;
     }
     private async void OnLoaded(object sender, RoutedEventArgs e) => await editor.InitializeAsync(initialPath);
     private void OnClosing(object? sender, CancelEventArgs e)
@@ -24,5 +24,9 @@ public partial class MainWindow : Window
     {
         if (e.OriginalSource == sender && sender is TabControl tabs && tabs.SelectedItem is TabItem { Header: "TOML" } && DataContext is EditorViewModel model)
             model.PrepareRaw();
+        if (e.OriginalSource == sender && sender is TabControl historyTabs && historyTabs.SelectedItem is TabItem { Header: "History" } && editor.RefreshHistoryCommand.CanExecute(null))
+            editor.RefreshHistoryCommand.Execute(null);
     }
+    private void OnHistorySelectionChanged(object sender, SelectionChangedEventArgs e)
+    { if (sender is DataGrid grid) editor.SelectHistory(grid.SelectedItems.Cast<FileOrganizer.Windows.MoveRecord>()); }
 }

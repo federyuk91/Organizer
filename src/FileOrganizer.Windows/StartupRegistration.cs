@@ -42,7 +42,7 @@ public static class StartupRegistration
         {
             string? actual = store.Get(EntryName(configPath));
             if (actual is null) return new(StartupStatus.Absent, null, "Not registered");
-            string expected = $"\"{executable}\" run --config \"{configPath}\"";
+            string expected = $"\"{executable}\" run --background --config \"{configPath}\"";
             return string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase)
                 ? new(StartupStatus.Registered, actual, "Registered for this engine and config")
                 : new(StartupStatus.Mismatched, actual, "An entry exists, but its command differs from the selected engine/config");
@@ -58,7 +58,7 @@ public static class StartupRegistration
             throw new ArgumentException("Autostart requires absolute, quotable paths");
         if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Install from the published FileOrganizer.exe, not dotnet run.");
-        store.Set(EntryName(configPath), $"\"{executable}\" run --config \"{configPath}\"");
+        store.Set(EntryName(configPath), $"\"{executable}\" run --background --config \"{configPath}\"");
     }
     public static void Uninstall(IStartupStore store, string configPath) => store.Remove(EntryName(configPath));
 }

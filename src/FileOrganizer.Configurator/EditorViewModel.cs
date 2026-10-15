@@ -18,7 +18,7 @@ public sealed class EditorCommand(Action execute, Func<bool>? enabled = null) : 
     public event EventHandler? CanExecuteChanged { add => CommandManager.RequerySuggested += value; remove => CommandManager.RequerySuggested -= value; }
 }
 
-public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
+public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly Window owner;
     private readonly IStartupStore startup;
@@ -29,7 +29,7 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
     private ConfigurationSection? selectedFolder, selectedRule;
     private string status = "Open a TOML configuration or create a new one.", rawText = "", enginePath = "", previewName = "example.png", previewResult = "";
     private string resolvedPaths = "Validate or preview to resolve paths and exclusions.";
-    private bool rawPending, textReplaced, busy, external, disposed;
+    private bool rawPending, textReplaced, busy, external, disposed, reloadPending;
     private StartupState startupState = new(StartupStatus.Absent, null, "Select a configuration");
     public event PropertyChangedEventHandler? PropertyChanged;
     public ConfigurationDocument? Document => document;
@@ -37,8 +37,16 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
     public string ConfigPath => file?.Path ?? "Unsaved configuration";
     public string Title => (IsDirty ? "* " : "") + "File Organizer — " + ConfigPath;
     public bool IsDirty => rawPending || textReplaced || document?.IsDirty == true;
-    public bool Busy { get => busy; private set { busy = value; Refresh(); } }
-    public bool CanEditForm => !busy && !rawPending && document is not null;
+    public bool Busy
+    {
+        get => busy;
+        private set
+        {
+            busy = value; Refresh();
+            if (!value && reloadPending && !IsDirty) { reloadPending = false; ScheduleExternalCheck(); }
+        }
+    }
+    public bool CanEditForm => !busy && !rawPending && !external && document is not null;
     public bool HasFolder => CanEditForm && selectedFolder is not null;
     public bool HasRule => HasFolder && selectedRule is not null;
     public string Status { get => status; private set { status = value; Notify(); } }
@@ -46,11 +54,11 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
     public bool CanManageStartup => !busy && file is not null;
     public bool IsInteractive => !busy;
     public void PrepareRaw() { if (!rawPending) Guard(UpdateRaw); }
-    public string ExternalMessage => external ? "Changed on disk. Reload or Save As; saving over this file is blocked." : "";
+    public string ExternalMessage => external ? "CONFLICT: this draft differs from disk. The file values below are current; Reload or Save As. Editing and overwrite are blocked." : "";
     public ConfigurationSection? SelectedFolder
     {
         get => selectedFolder;
-        set { selectedFolder = value; SelectedRule = value?.Rules.FirstOrDefault(); Notify(); Notify(nameof(Rules)); Refresh(); }
+        set { selectedFolder = value; SelectedRule = value?.Rules.FirstOrDefault(); Notify(); Notify(nameof(Rules)); Refresh(); Notify(nameof(SyncMessage)); }
     }
     public ObservableCollection<ConfigurationSection>? Rules => selectedFolder?.Rules;
     public ConfigurationSection? SelectedRule { get => selectedRule; set { selectedRule = value; Notify(); Refresh(); } }
@@ -88,7 +96,7 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
     public ICommand ApplyRawCommand { get; }
     public ICommand RefreshRawCommand { get; }
 
-    public EditorViewModel(Window owner, IStartupStore? startupStore = null)
+    public EditorViewModel(Window owner, IStartupStore? startupStore = null, MoveHistory? history = null, EngineStateStore? states = null)
     {
         this.owner = owner;
         startup = startupStore ?? new RegistryStartupStore();
@@ -115,12 +123,14 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
         ApplyRawCommand = new EditorCommand(() => Guard(ApplyRaw), () => !Busy && rawPending);
         RefreshRawCommand = new EditorCommand(() => { if (!rawPending || ConfirmRemove("unapplied TOML edits")) UpdateRaw(); }, () => !Busy && document is not null);
         enginePath = FindEngine();
+        InitializeCompanions(history ?? new MoveHistory(MoveHistory.DefaultDirectory), states ?? new EngineStateStore(EngineStateStore.DefaultDirectory));
     }
     public async Task InitializeAsync(string? path)
     {
         path ??= Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FileOrganizer", "config.toml");
         if (File.Exists(path)) await LoadAsync(path);
         else Status = "Configuration not found: " + path + ". Use Open or New; no files have been created.";
+        await RefreshDiskAndRuntimeAsync();
     }
     private async Task OpenAsync()
     {
@@ -133,13 +143,14 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
         Busy = true;
         try
         {
-            ConfigurationFile candidate = new(Paths.Normalize(Path.GetFullPath(path)));
+            ConfigurationFile candidate = new(Paths.NormalizeLiteral(Path.GetFullPath(path)));
             ConfigurationDocument? loaded = null;
             string? error = null;
             try { loaded = await Task.Run(candidate.Open); }
             catch (ConfigException exception) { error = exception.Message; }
             file = candidate; Attach(loaded); textReplaced = rawPending = false; external = false;
             SetRaw(candidate.Text); Watch(); RefreshStartup();
+            await RefreshDiskAndRuntimeAsync();
             Status = error is null ? "Loaded. Save validates the complete configuration. The engine runs independently." : "Invalid TOML; correct it in the TOML tab: " + error;
         }
         catch (Exception exception) when (Expected(exception)) { Status = exception.Message; }
@@ -152,7 +163,7 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
         if (document is not null) document.Changed += DocumentChanged;
         SelectedFolder = document?.Folders.FirstOrDefault(); Refresh();
     }
-    private void DocumentChanged(object? sender, EventArgs e) { ResolvedPaths = "Settings changed. Validate or preview again to resolve paths."; Refresh(); }
+    private void DocumentChanged(object? sender, EventArgs e) { ResolvedPaths = "Settings changed. Validate or preview again to resolve paths."; Refresh(); Notify(nameof(SyncMessage)); }
     private void New()
     {
         if (!ConfirmDiscard()) return;
@@ -193,7 +204,7 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
             {
                 SaveFileDialog picker = new() { Filter = "TOML configuration|*.toml", DefaultExt = ".toml", FileName = file?.Path ?? "config.toml", OverwritePrompt = false };
                 if (picker.ShowDialog(owner) != true) return false;
-                string path = Paths.Normalize(Path.GetFullPath(picker.FileName));
+                string path = Paths.NormalizeLiteral(Path.GetFullPath(picker.FileName));
                 if (file is not null && Paths.Comparer.Equals(path, file.Path)) target = file;
                 else
                 {
@@ -203,8 +214,9 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
             }
             else target = file;
             await Task.Run(() => target.Save(text));
-            file = target; Attach(new ConfigurationDocument(text)); textReplaced = rawPending = external = false;
-            SetRaw(text); Watch(); RefreshStartup();
+            ConfigurationDocument saved = await Task.Run(target.Open);
+            file = target; Attach(saved); textReplaced = rawPending = external = false;
+            SetRaw(target.Text); Watch(); RefreshStartup(); await RefreshDiskAndRuntimeAsync();
             Status = "Saved atomically. " + (config.General.WatchConfigChanges ? "A running engine may immediately reload and reconcile files." : "Restart the engine to apply changes; config watching is disabled.");
             return true;
         }
@@ -284,7 +296,7 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
             watcher = new FileSystemWatcher(Path.GetDirectoryName(file.Path)!) { NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size };
             watcher.Changed += OnDiskChange; watcher.Created += OnDiskChange; watcher.Deleted += OnDiskChange;
             watcher.Renamed += (_, e) => { if (Paths.Comparer.Equals(e.FullPath, file?.Path) || Paths.Comparer.Equals(e.OldFullPath, file?.Path)) ScheduleExternalCheck(); };
-            watcher.Error += (_, e) => owner.Dispatcher.BeginInvoke(() => Status = "Configuration watcher failed; Save will still check conflicts: " + e.GetException().Message);
+            watcher.Error += (_, e) => owner.Dispatcher.BeginInvoke(() => { external = true; Status = "Configuration watcher failed; current form is not verified: " + e.GetException().Message; Refresh(); });
             watcher.EnableRaisingEvents = true;
         }
         catch (Exception exception) when (Expected(exception)) { Status = "Config watcher unavailable; Save still checks conflicts: " + exception.Message; }
@@ -300,7 +312,12 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
         {
             await Task.Delay(300, token);
             bool changed = observed is not null && await Task.Run(observed.HasExternalChanges, token);
-            if (ReferenceEquals(observed, file)) { external = changed; Notify(nameof(ExternalChanged)); Notify(nameof(ExternalMessage)); if (changed) Status = ExternalMessage; }
+            if (ReferenceEquals(observed, file))
+            {
+                if (changed && !IsDirty && !Busy && observed is not null) { external = true; await LoadAsync(observed.Path); if (!external) Status = "Reloaded external changes from disk."; }
+                else { external = changed; if (changed) { Status = ExternalMessage; if (Busy && !IsDirty) reloadPending = true; } Refresh(); }
+                await RefreshDiskAndRuntimeAsync();
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception exception) when (Expected(exception)) { external = true; Status = "Cannot verify external changes: " + exception.Message; Refresh(); }
@@ -320,13 +337,13 @@ public sealed class EditorViewModel : INotifyPropertyChanged, IDisposable
         }
         return "";
     }
-    private static bool Expected(Exception e) => e is IOException or UnauthorizedAccessException or ConfigException or ArgumentException or InvalidOperationException or System.Security.SecurityException;
+    private static bool Expected(Exception e) => e is IOException or UnauthorizedAccessException or ConfigException or ArgumentException or InvalidOperationException or System.Security.SecurityException or System.Text.Json.JsonException;
     private void Notify([CallerMemberName] string? property = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
     private void Refresh()
     {
-        foreach (string property in new[] { nameof(Document), nameof(Folders), nameof(IsDirty), nameof(Title), nameof(Busy), nameof(CanEditForm), nameof(HasFolder), nameof(HasRule), nameof(ConfigPath), nameof(ExternalMessage), nameof(ExternalChanged), nameof(CanManageStartup), nameof(IsInteractive) }) Notify(property);
+        foreach (string property in new[] { nameof(Document), nameof(Folders), nameof(IsDirty), nameof(Title), nameof(Busy), nameof(CanEditForm), nameof(HasFolder), nameof(HasRule), nameof(ConfigPath), nameof(ExternalMessage), nameof(ExternalChanged), nameof(CanManageStartup), nameof(IsInteractive), nameof(SyncMessage) }) Notify(property);
         CommandManager.InvalidateRequerySuggested();
     }
     public void Dispose()
-    { disposed = true; watcher?.Dispose(); debounce?.Cancel(); debounce?.Dispose(); if (document is not null) document.Changed -= DocumentChanged; }
+    { disposed = true; watcher?.Dispose(); debounce?.Cancel(); debounce?.Dispose(); DisposeCompanions(); if (document is not null) document.Changed -= DocumentChanged; }
 }

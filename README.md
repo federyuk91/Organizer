@@ -15,7 +15,7 @@ Organizza automaticamente i file su **Windows 10/11 x64**, con regole ordinate e
 
 ## Installazione
 
-1. Scarica `FileOrganizer-1.0.1-win-x64-Setup.exe` dalla sezione [Releases](https://github.com/federyuk91/Organizer/releases), quando disponibile. Compilando il repository, il file viene prodotto in `artifacts/installer/`.
+1. Scarica `FileOrganizer-1.1.0-win-x64-Setup.exe` dalla sezione [Releases](https://github.com/federyuk91/Organizer/releases), quando disponibile. Compilando il repository, il file viene prodotto in `artifacts/installer/`.
 2. Avvia il setup con un doppio clic. Installa motore, configuratore e runtime necessari: sul PC destinatario non servono .NET, PowerShell o Visual Studio.
 3. Mantieni il percorso proposto, `%LOCALAPPDATA%\Programs\FileOrganizer`, oppure scegline uno scrivibile dal tuo utente. L’installazione è per utente e non richiede privilegi amministrativi.
 4. Apri **File Organizer** dal menu Start; puoi scegliere anche il collegamento sul desktop durante il setup.
@@ -39,11 +39,11 @@ I collegamenti **Scansione adesso** e **Avvia organizzazione** usano la configur
 
 Nel configuratore, salva una configurazione valida e abilita **Start with Windows**. Il motore installato in `engine\FileOrganizer.exe` viene individuato automaticamente; puoi selezionarne un altro con **Browse**. Il controllo legge e modifica la vera registrazione HKCU e segnala comandi diversi o errori di accesso.
 
-Il toggle avvia il motore al prossimo accesso a Windows, non immediatamente. Per partire subito usa **Avvia organizzazione**. Non eseguire contemporaneamente più istanze sulla stessa configurazione. Restrizioni di Windows o Gestione attività possono impedire l’avvio anche quando la voce è registrata.
+Il toggle avvia il motore al prossimo accesso a Windows, non immediatamente. L’avvio automatico usa `run --background`, senza mantenere un terminale aperto; i messaggi operativi rimangono nei log rotanti. Per partire subito in una finestra controllabile usa **Avvia organizzazione**; per fermare anche il motore in background usa **Arresta organizzazione** dal menu Start. È consentito un solo motore per utente Windows, anche con TOML diversi: arresta il monitoraggio prima di una scansione manuale. Restrizioni di Windows o Gestione attività possono impedire l’avvio anche quando la voce è registrata.
 
 ### Aggiornamento, disinstallazione e trasferimento
 
-- Arresta il motore con `Ctrl+C` e chiudi la GUI prima di aggiornare o disinstallare. Il setup non forza la chiusura dei processi durante uno spostamento.
+- Arresta il motore con **Arresta organizzazione** o `engine\FileOrganizer.exe stop` e chiudi la GUI prima di aggiornare o disinstallare. Per una versione precedente usa `Ctrl+C` nella finestra del motore. Il setup non forza la chiusura dei processi durante uno spostamento.
 - Per aggiornare, esegui il nuovo installer sullo stesso percorso. Configurazioni e log in `%LOCALAPPDATA%\FileOrganizer` vengono conservati.
 - Disinstalla da **Impostazioni → App** oppure dal menu Start. Vengono rimossi programmi, collegamenti e registrazioni di avvio che puntano al motore di questa installazione. Configurazioni, log e file organizzati rimangono.
 - Per un amico o un altro PC, condividi soltanto il setup. Puoi copiare separatamente il TOML per riutilizzare le regole, adattando i percorsi prima di attivare gli spostamenti. L’avvio automatico va registrato nuovamente sul PC destinatario.
@@ -77,6 +77,8 @@ Dal terminale, nel percorso di installazione:
 .\engine\FileOrganizer.exe validate
 .\engine\FileOrganizer.exe scan
 .\engine\FileOrganizer.exe run
+.\engine\FileOrganizer.exe run --background
+.\engine\FileOrganizer.exe stop
 .\engine\FileOrganizer.exe install
 .\engine\FileOrganizer.exe uninstall
 .\engine\FileOrganizer.exe --help
@@ -88,6 +90,10 @@ Dal terminale, nel percorso di installazione:
 `install` e `uninstall` gestiscono esclusivamente la registrazione di avvio automatico, non l’installazione/disinstallazione dei programmi. Tutti i comandi accettano `--config`. Il percorso predefinito è `%LOCALAPPDATA%\FileOrganizer\config.toml`.
 
 La simulazione scrive in console senza creare destinazioni o log. Nell’esecuzione normale i log sono in `%LOCALAPPDATA%\FileOrganizer\logs\<config-id>`: un file da 1 MiB più tre archivi. Il livello predefinito è `warning`; scegli `info` per vedere anche gli spostamenti riusciti. Codici di uscita: `0` successo, `2` configurazione/argomenti invalidi, `3` errore operativo o istanza già attiva, `130` annullamento.
+
+`stop` richiede l’arresto sicuro dell’unico motore dell’utente, indipendentemente dal TOML. `run --background` scollega la console: per leggere una simulazione usa `scan` in primo piano; gli errori di avvio in background sono registrati in `logs\startup`. L’aggiornamento del setup converte le registrazioni autorun già appartenenti a questa installazione alla modalità background, conservando il percorso del TOML.
+
+Per organizzare solo i file direttamente in Downloads, lascia **Recursive** disattivato. Attivandolo si elaborano anche file interni a programmi e archivi già estratti: non distingue queste cartelle dalle altre. Le destinazioni gestite rimangono ricorsive anche con la sorgente non ricorsiva.
 
 ## Configuratore
 
@@ -114,10 +120,10 @@ Requisiti di sviluppo: Windows x64 e .NET 10 SDK (versione in [global.json](glob
 
 ```powershell
 ./scripts/build.ps1
-./scripts/build-installer.ps1 -Version 1.0.1
+./scripts/build-installer.ps1 -Version 1.1.0
 
 # Fallback senza toolchain C++:
-./scripts/build-installer.ps1 -Version 1.0.1 -EngineMode Standard
+./scripts/build-installer.ps1 -Version 1.1.0 -EngineMode Standard
 
 # Compilatore Inno in un percorso diverso:
 ./scripts/build-installer.ps1 -CompilerPath "C:\tools\Inno Setup 6\ISCC.exe"
@@ -140,7 +146,7 @@ Output in `artifacts/publish/`. Per AOT basta `FileOrganizer.exe`; per motore st
 
 `scripts/build.ps1` compila l’intera soluzione ed esegue i test; `-EngineOnly` esclude WPF. Per includere il test fisico tra volumi, imposta `FILEORGANIZER_TEST_SECOND_VOLUME` su un percorso temporaneo scrivibile in un altro disco. Il test crea e rimuove solo una propria sottocartella univoca. In assenza di questa variabile quel test viene saltato; i test non usano le vere cartelle Download o Desktop.
 
-Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **94 test superati** (90 core/integrazione, 4 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, permessi e registrazioni HKCU su chiavi isolate. Accesso reale a Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
+Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **119 test superati** (112 core/integrazione, 7 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Accesso reale a Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
 
 Il setup è stato verificato con installazione per utente senza amministratore, collegamenti, motore installato, simulazione, avvio/chiusura GUI, reinstallazione senza perdita del TOML, disinstallazione e rimozione selettiva dell’autorun. Puoi ripetere la prova con `./scripts/verify-installer.ps1`: usa una cartella sotto `artifacts/installer`, crea temporaneamente proprie voci HKCU e le pulisce alla fine. Richiede un account senza installazioni o collegamenti File Organizer preesistenti, per non interferire con l’uso reale. I log restano negli artefatti di verifica.
 
@@ -167,3 +173,23 @@ Sono osservazioni su questa macchina, non garanzie. `scripts/verify-publish.ps1`
 `assets/FileOrganizer.png` è il sorgente trasparente dell’icona; `scripts/build-icon.ps1` genera `assets/FileOrganizer.ico` con dieci risoluzioni da 16 a 256 pixel e canale alpha. Entrambi gli eseguibili e il setup utilizzano questo asset, senza dipendenze grafiche aggiuntive nel motore.
 
 Tomlyn è l’unica dipendenza applicativa esterna; xUnit è usato nei test. Per problemi o proposte, apri una [issue](https://github.com/federyuk91/Organizer/issues) includendo versione, errore e una configurazione depurata da percorsi o dati personali.
+
+## Cronologia e annullamento (dalla versione 1.1.0)
+
+La scheda **History** mostra gli spostamenti registrati negli ultimi sette giorni. Aprendola, o premendo **Refresh history**, aggiorni l’elenco. Quando arrivano nuovi movimenti, un avviso segnala che l’elenco va aggiornato. **Show all configurations** include anche TOML rinominati o eliminati.
+
+Seleziona una o più righe con Ctrl/Shift e premi **Undo selected**. Dopo la conferma, l’app richiede l’arresto sicuro del motore e acquisisce il blocco esclusivo per tutta l’operazione. Ripristina i movimenti dal più recente al più vecchio, compresi nomi modificati dalla gestione duplicati e trasferimenti tra volumi. Il motore rimane fermo: controlla le regole prima di riavviarlo, altrimenti potrebbero rispostare i file. **Cancel undo** interrompe l’operazione conservando i ripristini già completati.
+
+Ogni file viene verificato tramite identità del filesystem, dimensione, data di modifica e SHA-256. Se è stato modificato, sostituito, eliminato o il percorso originale è occupato, viene saltato con una spiegazione. Non si sovrascrivono file. Junction e hard link vengono rifiutati anche durante l’annullamento.
+
+La cronologia inizia con questa versione: non ricostruisce automaticamente i movimenti precedenti, le operazioni manuali o le cancellazioni di duplicati identici. Non è un backup del contenuto dei file. Il registro contiene percorsi, identità e hash, resta nel profilo utente in `%LOCALAPPDATA%\FileOrganizer\history` e non viene usato per decidere le regole di classificazione. I metadati scaduti vengono eliminati durante le operazioni, senza timer periodici; la scadenza non elimina mai file organizzati.
+
+Il motore salva e forza su disco il record prima di uno spostamento. Se non può registrarlo, ferma le elaborazioni. Le scritture incomplete in coda sono recuperate conservando l’ultimo record completo; un trasferimento interrotto viene annullato solo quando il suo risultato è verificabile. Lo hashing aggiunge una lettura sequenziale dei file effettivamente spostati; non vengono create copie di backup per gli spostamenti sullo stesso volume.
+
+## Form, file e impostazioni applicate
+
+La parte superiore del configuratore distingue sempre la **bozza**, i valori **ON DISK** del TOML e lo snapshot applicato dal **ENGINE**. Mostra esplicitamente percorso sorgente, abilitazione e **Include subfolders**. Un checkbox modificato ma non salvato rappresenta una bozza: il banner rosso ricorda che non è ancora applicata.
+
+Se il TOML cambia esternamente e la bozza è pulita, il form viene ricaricato automaticamente. Se esistono modifiche locali, vengono conservate, il conflitto resta evidente e l’editing/sovrascrittura vengono bloccati: usa **Reload** oppure **Save As**. Il salvataggio rilegge il file realmente scritto. Il controllo viene ripetuto anche tornando sulla finestra e premendo **Verify state**, senza polling periodico.
+
+Il motore pubblica un piccolo file diagnostico atomico, `engine-state.json`, con PID, ora di avvio, eseguibile, TOML, hash dello snapshot e impostazioni applicate. Non è una seconda configurazione. La GUI verifica PID e ora di avvio prima di considerarlo attivo. **Open engine's TOML** apre il file effettivamente usato. Un avviso sempre visibile segnala TOML diverso, modifiche non ancora applicate o reload rifiutato; in quest’ultimo caso vengono mostrate le impostazioni precedenti ancora in uso. Con motore fermo, versione precedente o stato non leggibile, la GUI dichiara lo stato non verificabile e non presenta il form come prova delle impostazioni applicate.

@@ -28,6 +28,19 @@ internal static class NativeFiles
         throw Error(path);
     }
 
+    internal static SafeFileHandle OpenJournal(string path)
+    {
+        SafeFileHandle handle = CreateFileW(Extended(path), 0xC0000000u, 1, 0, 4, 0x00200000, 0);
+        if (handle.IsInvalid) { handle.Dispose(); throw Error(path); }
+        try
+        {
+            Information info = Info(handle);
+            if ((info.Attributes & 0x410) != 0 || info.Links != 1) throw new IOException("Unsafe journal file: " + path);
+            return handle;
+        }
+        catch { handle.Dispose(); throw; }
+    }
+
     internal static SafeFileHandle Open(string path, bool directory, bool deleteAccess = false)
     {
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Safe transfers require Windows.");

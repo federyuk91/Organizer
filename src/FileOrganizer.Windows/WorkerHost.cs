@@ -16,6 +16,9 @@ public sealed class WorkerHost : IAsyncDisposable
     private readonly CancellationTokenSource lifetime = new();
     private readonly RotatingLog log;
     private readonly string configPath;
+    private readonly MoveHistory? history;
+    private readonly Action<string, Configuration>? accepted;
+    private readonly Action<string>? rejected;
     private ManagedDirectories current;
     private Task[] workers = [];
     private FileSystemWatcher? configWatcher;
@@ -28,9 +31,11 @@ public sealed class WorkerHost : IAsyncDisposable
     public int WatcherRecoveries => Volatile.Read(ref watcherRecoveries);
     public int Reconciliations => Volatile.Read(ref reconciliations);
     public int WatcherCount => watchers.Count;
+    public bool HistoryFailed { get; private set; }
 
-    public WorkerHost(Configuration config, string configPath, RotatingLog log)
-    { current = new ManagedDirectories(config); this.configPath = configPath; this.log = log; }
+    public WorkerHost(Configuration config, string configPath, RotatingLog log, MoveHistory? history = null,
+        Action<string, Configuration>? accepted = null, Action<string>? rejected = null)
+    { current = new ManagedDirectories(config); this.configPath = configPath; this.log = log; this.history = history; this.accepted = accepted; this.rejected = rejected; }
 
     public async Task<int> ScanAsync(CancellationToken token = default)
     {
@@ -43,7 +48,7 @@ public sealed class WorkerHost : IAsyncDisposable
             await Task.WhenAll(workers);
             return Failures == 0 ? 0 : 3;
         }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { return 130; }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { return HistoryFailed ? 3 : 130; }
     }
 
     public async Task RunAsync(CancellationToken token)
@@ -69,15 +74,17 @@ public sealed class WorkerHost : IAsyncDisposable
                 {
                     try
                     {
-                        ManagedDirectories candidate = new(ConfigurationLoader.Load(configPath), CurrentScope);
+                        string text = ConfigurationFile.ReadSharedText(configPath);
+                        ManagedDirectories candidate = new(ConfigurationLoader.Parse(text), CurrentScope);
                         ReplaceWatchers(candidate);
                         Volatile.Write(ref current, candidate);
                         log.Level = candidate.Configuration.General.LogLevel;
                         log.ConsoleOnly = candidate.Configuration.General.DryRun;
+                        accepted?.Invoke(text, candidate.Configuration);
                         log.Write(LogLevel.Info, "Configuration reloaded");
                     }
                     catch (Exception exception) when (Recoverable(exception))
-                    { Interlocked.Increment(ref rejectedConfigurations); log.Write(LogLevel.Warning, "Config rejected; keeping last good snapshot: " + exception.Message); }
+                    { Interlocked.Increment(ref rejectedConfigurations); rejected?.Invoke(exception.Message); log.Write(LogLevel.Warning, "Config rejected; keeping last good snapshot: " + exception.Message); }
                 }
                 if (Interlocked.Exchange(ref recoveryRequested, 0) != 0)
                 {
@@ -192,7 +199,8 @@ public sealed class WorkerHost : IAsyncDisposable
         { pending.TryRemove(path, out _); Reconcile(); }
     }
     private bool Ignored(string path) => Paths.Comparer.Equals(path, configPath) || Paths.Comparer.Equals(path, configPath + ".bak") ||
-        Paths.Within(path, log.DirectoryPath) || Matching.IsTemporary(path);
+        Paths.Within(path, log.DirectoryPath) || history is not null && Paths.Within(path, history.DirectoryPath) ||
+        Paths.Comparer.Equals(path, Path.Combine(EngineStateStore.DefaultDirectory, "engine-state.json")) || Matching.IsTemporary(path);
     private void StartWorkers()
     {
         if (workers.Length == 0) workers = Enumerable.Range(0, 16).Select(ConsumeAsync).ToArray();
@@ -226,7 +234,7 @@ public sealed class WorkerHost : IAsyncDisposable
     private readonly SemaphoreSlim moveGate = new(1, 1);
     private async Task ConsumeAsync(int worker)
     {
-        SafeTransfer transfer = new(log.Write);
+        SafeTransfer transfer = new(log.Write, history, configPath);
         try
         {
             await foreach (Work work in queue.Reader.ReadAllAsync(lifetime.Token))
@@ -249,7 +257,10 @@ public sealed class WorkerHost : IAsyncDisposable
                         Rule? rule = Matching.First(work.Folder, work.Path);
                         if (rule is null || ManagedDirectories.AlreadyPlaced(work.Path, rule)) continue;
                         if (!await Readiness.WaitAsync(work.Path, TimeSpan.FromSeconds(work.Config.General.ReadyTimeoutSeconds), lifetime.Token))
-                        { Interlocked.Increment(ref failures); log.Write(LogLevel.Warning, "Readiness timed out: " + work.Path); continue; }
+                        {
+                            if (!File.Exists(work.Path)) continue;
+                            Interlocked.Increment(ref failures); log.Write(LogLevel.Warning, "File not ready or inaccessible: " + work.Path); continue;
+                        }
                         for (int attempt = 0; attempt < 3; attempt++)
                         {
                             try
@@ -264,14 +275,22 @@ public sealed class WorkerHost : IAsyncDisposable
                                 finally { moveGate.Release(); }
                                 break;
                             }
-                            catch (IOException) when (attempt < 2 && File.Exists(work.Path))
+                            catch (IOException exception) when (exception is not HistoryUnavailableException && attempt < 2 && File.Exists(work.Path))
                             { await Task.Delay(200 * (attempt + 1), lifetime.Token); }
                         }
                     }
                     finally { concurrency.Release(); }
                 }
+                catch (HistoryUnavailableException exception)
+                {
+                    HistoryFailed = true; Interlocked.Increment(ref failures);
+                    log.Write(LogLevel.Error, exception.Message); lifetime.Cancel();
+                }
                 catch (Exception exception) when (Recoverable(exception))
-                { Interlocked.Increment(ref failures); log.Write(LogLevel.Warning, "Processing failed: " + work.Path + ": " + exception.Message); }
+                {
+                    if (!File.Exists(work.Path)) continue;
+                    Interlocked.Increment(ref failures); log.Write(LogLevel.Warning, "Processing failed: " + work.Path + ": " + exception.Message);
+                }
                 finally
                 {
                     pending.TryRemove(work.Path, out _);

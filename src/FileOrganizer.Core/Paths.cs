@@ -9,9 +9,16 @@ public static class Paths
 {
     public static readonly StringComparer Comparer = StringComparer.OrdinalIgnoreCase;
     public static string Normalize(string path, string? relativeTo = null)
+        => NormalizeCore(path, relativeTo, true);
+    public static string NormalizeLiteral(string path, string? relativeTo = null)
+        => NormalizeCore(path, relativeTo, false);
+    private static string NormalizeCore(string path, string? relativeTo, bool expandVariables)
     {
-        path = Environment.ExpandEnvironmentVariables(path);
-        if (path.Contains('%')) throw new ConfigException("Unresolved environment variable: " + path);
+        if (expandVariables)
+        {
+            path = Environment.ExpandEnvironmentVariables(path);
+            if (System.Text.RegularExpressions.Regex.IsMatch(path, "%[^%]+%")) throw new ConfigException("Unresolved environment variable: " + path);
+        }
         if (!Path.IsPathFullyQualified(path))
         {
             if (Path.IsPathRooted(path)) throw new ConfigException("Partially rooted path is ambiguous: " + path);

@@ -19,9 +19,17 @@
     <Button Content="Save As…" Command="{Binding SaveAsCommand}"/>
     <Button Content="Reload" Command="{Binding ReloadCommand}"/>
     <Button Content="Validate" Command="{Binding ValidateCommand}"/>
+    <Button Content="Cancel undo" Command="{Binding CancelUndoCommand}"/>
    </WrapPanel>
    <TextBox Text="{Binding ConfigPath, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" Padding="0"/>
    <TextBlock Text="{Binding ExternalMessage}" Foreground="DarkRed" TextWrapping="Wrap"/>
+   <TextBlock Text="{Binding SyncMessage}" Foreground="DarkRed" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4"/>
+   <TextBlock Text="{Binding RuntimeWarning}" Foreground="DarkRed" FontWeight="SemiBold" TextWrapping="Wrap"/>
+   <Expander Header="Current file values and applied engine state" IsExpanded="True">
+    <StackPanel><ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto"><StackPanel><TextBlock Text="{Binding SavedSummary}" TextWrapping="Wrap"/><TextBlock Text="{Binding RuntimeMessage}" TextWrapping="Wrap" Margin="0,4"/></StackPanel></ScrollViewer>
+     <WrapPanel><Button Content="Verify state" Command="{Binding CheckSyncCommand}"/><Button Content="Open engine's TOML" Command="{Binding OpenEngineConfigCommand}"/></WrapPanel>
+    </StackPanel>
+   </Expander>
   </StackPanel>
   <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" BorderThickness="1" Padding="6" Margin="0,8,0,0">
    <TextBox Text="{Binding Status, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" MinHeight="38" MaxHeight="100"/>
@@ -42,7 +50,7 @@
      </DockPanel>
      <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" IsEnabled="{Binding HasFolder}">
       <StackPanel>
-       <GroupBox Header="Folder">
+       <GroupBox Header="Folder — draft until Save">
         <StackPanel>
          <TextBlock Text="Name"/><TextBox Text="{Binding SelectedFolder.Fields[name].Text, UpdateSourceTrigger=PropertyChanged}"/>
          <TextBlock Text="Source path (environment variables supported)"/>
@@ -122,6 +130,26 @@
       <WrapPanel><Button Content="Apply TOML to form" Command="{Binding ApplyRawCommand}"/><Button Content="Refresh from form / discard unapplied text" Command="{Binding RefreshRawCommand}"/></WrapPanel>
      </StackPanel>
      <TextBox Text="{Binding RawText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AcceptsTab="True" FontFamily="Consolas" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap"/>
+    </DockPanel>
+   </TabItem>
+   <TabItem Header="History">
+    <DockPanel Margin="10">
+     <StackPanel DockPanel.Dock="Top">
+      <TextBlock Text="Recorded moves from the last seven days for the open TOML. Undo checks identity and content, never overwrites files, and leaves the engine stopped. Older moves and duplicate deletions cannot be undone here." TextWrapping="Wrap"/>
+      <CheckBox Content="Show all configurations (including renamed or deleted TOML files)" IsChecked="{Binding ShowAllHistory}" Margin="0,6"/>
+      <WrapPanel><Button Content="Refresh history" Command="{Binding RefreshHistoryCommand}"/><Button Content="Undo selected" Command="{Binding UndoHistoryCommand}"/><Button Content="Stop engine safely" Command="{Binding StopWorkerCommand}"/></WrapPanel>
+      <TextBlock Text="{Binding HistoryStatus}" TextWrapping="Wrap" Margin="0,5"/>
+     </StackPanel>
+     <DataGrid ItemsSource="{Binding HistoryEntries}" IsReadOnly="True" AutoGenerateColumns="False" SelectionMode="Extended" SelectionUnit="FullRow" SelectionChanged="OnHistorySelectionChanged" EnableRowVirtualization="True" EnableColumnVirtualization="True">
+      <DataGrid.Columns>
+       <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="150"/>
+       <DataGridTextColumn Header="State" Binding="{Binding State}" Width="100"/>
+       <DataGridTextColumn Header="Original path" Binding="{Binding Source}" Width="*"/>
+       <DataGridTextColumn Header="Destination" Binding="{Binding Destination}" Width="*"/>
+       <DataGridTextColumn Header="Bytes" Binding="{Binding Size}" Width="90"/>
+       <DataGridTextColumn Header="TOML" Binding="{Binding ConfigPath}" Width="160"/>
+      </DataGrid.Columns>
+     </DataGrid>
     </DockPanel>
    </TabItem>
   </TabControl>

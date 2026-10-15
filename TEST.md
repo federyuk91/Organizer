@@ -46,8 +46,9 @@ Use xUnit or another lightweight mainstream .NET test framework. Tests must oper
 | T-23 | R-18 | Readiness timeout leaves original intact; later retry succeeds. |
 | T-24 | R-20 | Startup scan toggle and one-shot `scan` obey recursion and exclusions. |
 | T-25 | R-20 | `dry_run` creates no folders and moves/deletes nothing. |
-| T-26 | R-21 | `validate` exits without moving; help works; invalid config exits nonzero; second `run` for same config is refused. |
+| T-26 | R-21 | `validate` exits without moving; help works; invalid config exits nonzero; second worker with the same or another TOML is refused; background run and graceful stop work; old same-config locks remain respected. |
 | T-27 | R-21 | Per-user autostart install/uninstall test uses isolated or mock registry/task layer; never changes developer machine implicitly. |
+| T-34 | R-14, R-21 | Literal percent characters and environment-looking tokens in existing filenames are preserved; files disappearing during readiness are not reported as timeouts; autorun upgrades preserve config paths and switch to background mode. |
 | T-28 | R-22 | Log level filters correctly and rotation limits disk use. |
 | T-29 | R-03/23 | Release and Native AOT publish checks on supported Windows toolchain; record real exe size, working set and idle CPU only if measured. |
 | T-30 | R-11/12/24 | Add a higher-priority `*gatt*.png` rule after files are in Images: organized and manually placed files move to Images/Cats without extra source definitions. |
@@ -65,3 +66,12 @@ Use xUnit or another lightweight mainstream .NET test framework. Tests must oper
 6. Report untested Windows-specific cases honestly when environment is not Windows.
 
 **Release gate:** no failing safety/integrity tests; no unexplained skipped required tests. If a feature cannot be validated, document precise limits and do not claim that it passed.
+
+## History and UI synchronization
+
+| ID | Requirements | Verification |
+|---|---|---|
+| T-35 | R-25, R-26 | Persistent moves, final collision names, exact seven-day cutoff, config filtering/all-config view, metadata-only expiry, chained reverse undo, same-volume and physical cross-volume undo. |
+| T-36 | R-25, R-26 | Refuse modified/replaced/missing files and occupied originals; cancellation, prepared/undo-prepared recovery, partial-tail repair, corrupt journal refusal and worker stop on journal failure. |
+| T-37 | R-27 | WPF recursive checkbox loads true accurately; unsaved false leaves disk true with a draft banner; save reads false back; clean external true reloads; dirty conflicts retain edits and display current disk values. |
+| T-38 | R-27 | Report another active TOML, rejected/unapplied hashes, actual applied folder flags, and stale PID/start identity; four WPF tabs render without binding errors. |

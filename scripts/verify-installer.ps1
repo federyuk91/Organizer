@@ -1,5 +1,5 @@
 param(
-    [string]$InstallerPath = 'artifacts/installer/FileOrganizer-1.0.1-win-x64-Setup.exe',
+    [string]$InstallerPath = 'artifacts/installer/FileOrganizer-1.1.0-win-x64-Setup.exe',
     [switch]$Isolated,
     [string]$CompilerPath
 )
@@ -68,7 +68,7 @@ try {
         throw 'Installer contains local/private build files'
     }
     $shell = New-Object -ComObject WScript.Shell
-    foreach ($shortcut in @('File Organizer', 'Avvia organizzazione', 'Scansione adesso', 'Disinstalla File Organizer')) {
+    foreach ($shortcut in @('File Organizer', 'Avvia organizzazione', 'Scansione adesso', 'Arresta organizzazione', 'Disinstalla File Organizer')) {
         $link = Join-Path $menu "$shortcut.lnk"
         if (!(Test-Path -LiteralPath $link)) { throw "Shortcut missing: $shortcut" }
         $shortcutData = $shell.CreateShortcut($link)
@@ -114,7 +114,10 @@ try {
     Invoke-Setup $installer $arguments
     if ((Get-FileHash -LiteralPath $config).Hash -ne $hash) { throw 'Upgrade changed user configuration' }
     $registry = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($runKey)
-    try { if (!$registry.GetValue($ownedName)) { throw 'Upgrade removed autorun' } }
+    try {
+        $expectedCommand = '"' + "$install\engine\FileOrganizer.exe" + '" run --background --config "' + $config + '"'
+        if ($registry.GetValue($ownedName) -ne $expectedCommand) { throw 'Upgrade did not migrate autorun safely' }
+    }
     finally { $registry.Dispose() }
     Invoke-Setup "$install/unins000.exe" @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=`"$fixture/uninstall.log`"")
     if ((Test-Path "$install/engine/FileOrganizer.exe") -or (Test-Path "$install/FileOrganizer.Configurator.exe") -or (Test-Path -LiteralPath $menu)) { throw 'Uninstall left application files/shortcuts' }
