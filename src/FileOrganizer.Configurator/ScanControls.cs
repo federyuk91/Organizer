@@ -1,4 +1,5 @@
 using System.IO;
+using System.Diagnostics;
 using System.Windows.Input;
 using FileOrganizer.Core;
 using FileOrganizer.Windows;
@@ -9,23 +10,60 @@ public sealed partial class EditorViewModel
 {
     private Func<string, string, CancellationToken, Task<ScanResult>> scanRunner = null!;
     private Func<bool> workerRunning = null!, requestWorkerStop = null!;
+    private Func<bool> confirmScanSave = null!;
+    private bool scanStarting, scanProcessActive;
+    private Process? observedWorker;
+    private long observedWorkerStart;
     private CancellationTokenSource? scanCancellation;
     public ICommand StartScanCommand { get; private set; } = null!;
     public ICommand StopScanCommand { get; private set; } = null!;
-    private void InitializeScan(Func<string, string, CancellationToken, Task<ScanResult>> runner, Func<bool> running, Func<bool> stop)
+    private void InitializeScan(Func<string, string, CancellationToken, Task<ScanResult>> runner, Func<bool> running, Func<bool> stop, Func<bool> confirmSave)
     {
-        scanRunner = runner; workerRunning = running; requestWorkerStop = stop;
-        StartScanCommand = new EditorCommand(async () => await StartScanAsync(), () => !Busy && file is not null && document is not null && !IsDirty && !external);
-        StopScanCommand = new EditorCommand(async () => await StopScanAsync(), () => !Busy || scanCancellation is not null);
+        scanRunner = runner; workerRunning = running; requestWorkerStop = stop; confirmScanSave = confirmSave;
+        StartScanCommand = new EditorCommand(async () => await StartScanAsync(), () => !Busy && !scanStarting &&
+            (document is not null || rawPending) && !external && WorkerActivity() == false);
+        StopScanCommand = new EditorCommand(async () => await StopScanAsync(), () => scanProcessActive || !Busy && WorkerActivity() == true);
+    }
+    private bool? WorkerActivity()
+    {
+        try { return workerRunning(); }
+        catch (Exception exception) when (Expected(exception)) { return null; }
+    }
+    private void ObserveWorkerProcess(EngineSnapshot? snapshot)
+    {
+        // State is cleared just before the worker releases its lease; retain the exit notification.
+        if (snapshot is null && observedWorker is not null && !observedWorker.HasExited) return;
+        if (snapshot is not null && observedWorker?.Id == snapshot.Pid && observedWorkerStart == snapshot.StartedUtcTicks) return;
+        observedWorker?.Dispose(); observedWorker = null;
+        if (snapshot is null) return;
+        Process? candidate = null;
+        try
+        {
+            candidate = Process.GetProcessById(snapshot.Pid);
+            if (candidate.StartTime.ToUniversalTime().Ticks != snapshot.StartedUtcTicks) return;
+            candidate.Exited += (_, _) => StateChanged(null, null);
+            candidate.EnableRaisingEvents = true;
+            observedWorker = candidate; observedWorkerStart = snapshot.StartedUtcTicks; candidate = null;
+        }
+        catch (Exception exception) when (Expected(exception) || exception is System.ComponentModel.Win32Exception) { }
+        finally { candidate?.Dispose(); }
     }
     public async Task StartScanAsync()
     {
-        if (Busy) return;
-        if (file is null || document is null || IsDirty || external)
-        { Status = "Salva una configurazione valida e risolvi eventuali conflitti prima di avviare la scansione."; return; }
-        scanCancellation = new(); Busy = true;
+        if (Busy || scanStarting) return;
+        scanStarting = true; Busy = true;
         try
         {
+            if (workerRunning()) throw new IOException("Il motore è già attivo. Premi Arresta scansione e attendi l'arresto prima di avviare una scansione singola.");
+            if (external || file?.HasExternalChanges() == true) throw new ConfigurationConflictException("Il TOML è cambiato: ricaricalo prima di avviare la scansione.");
+            if (IsDirty || file is null)
+            {
+                if (!confirmScanSave()) { Status = "Scansione annullata: la bozza non è stata salvata."; return; }
+                if (!await SaveAsync(false)) return;
+                Busy = true;
+            }
+            if (file is null || document is null) throw new ConfigException("Apri o crea una configurazione valida prima di avviare la scansione.");
+            scanCancellation = new();
             string path = file.Path, engine = enginePath;
             CancellationToken token = scanCancellation.Token;
             bool dryRun = await Task.Run(() =>
@@ -39,7 +77,10 @@ public sealed partial class EditorViewModel
             });
             token.ThrowIfCancellationRequested();
             Status = "Scansione in corso con il TOML salvato: " + path;
-            ScanResult result = await scanRunner(engine, path, token);
+            Task<ScanResult> execution = scanRunner(engine, path, token);
+            scanProcessActive = !execution.IsCompleted; CommandManager.InvalidateRequerySuggested();
+            ScanResult result = await execution;
+            scanProcessActive = false; CommandManager.InvalidateRequerySuggested();
             Status = result.ExitCode switch
             {
                 0 => dryRun ? "Simulazione completata: nessun file spostato." : "Scansione completata. Consulta History per gli spostamenti registrati.",
@@ -54,6 +95,7 @@ public sealed partial class EditorViewModel
         catch (Exception exception) when (Expected(exception)) { Status = "Scansione non avviata: " + exception.Message; }
         finally
         {
+            scanProcessActive = false; CommandManager.InvalidateRequerySuggested();
             try
             {
                 await RefreshDiskAndRuntimeAsync();
@@ -65,12 +107,12 @@ public sealed partial class EditorViewModel
                 }
             }
             catch (Exception exception) when (Expected(exception)) { Status += "\nCronologia non disponibile: " + exception.Message; }
-            finally { scanCancellation.Dispose(); scanCancellation = null; Busy = false; }
+            finally { scanProcessActive = false; scanCancellation?.Dispose(); scanCancellation = null; scanStarting = false; Busy = false; }
         }
     }
     public async Task StopScanAsync()
     {
-        if (scanCancellation is not null)
+        if (scanProcessActive && scanCancellation is not null)
         {
             scanCancellation.Cancel();
             Status = "Arresto richiesto: attendo la conclusione sicura degli spostamenti in corso.";
@@ -79,6 +121,7 @@ public sealed partial class EditorViewModel
         if (Busy) return;
         try
         {
+            if (!workerRunning()) { Status = "Nessuna scansione o motore attivo."; CommandManager.InvalidateRequerySuggested(); return; }
             bool requested = await Task.Run(requestWorkerStop);
             Status = requested ? "Arresto richiesto al motore in background. Attendi che lo stato risulti fermo prima di avviare una scansione." : "Nessuna scansione o motore attivo ha accettato la richiesta di arresto.";
             await RefreshDiskAndRuntimeAsync();

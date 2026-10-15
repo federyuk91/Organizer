@@ -139,6 +139,7 @@ public sealed class WindowTests
             Assert.Equal("New rules", ((RulePreset)picker.SelectedItem).Name); Assert.Equal(15, picker.Items.Count);
             picker.SelectedIndex = 1; Assert.Equal("Images", vm.SelectedRulePreset.Name); Assert.Single(vm.SelectedFolder!.Rules);
             Button add = Descendants<Button>(window).Single(b => ReferenceEquals(b.Command, vm.AddRuleCommand));
+            await Eventually(() => add.IsEnabled);
             System.Windows.Automation.Peers.ButtonAutomationPeer peer = new(add);
             ((System.Windows.Automation.Provider.IInvokeProvider)peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)).Invoke();
             await Eventually(() => vm.SelectedFolder.Rules.Count == 2);
@@ -397,23 +398,118 @@ public sealed class WindowTests
         Assert.Equal(engine, launchedEngine); Assert.Equal(f.Config, launchedConfig); Assert.True(vm.Busy);
         Assert.False(vm.StartScanCommand.CanExecute(null)); Assert.True(vm.StopScanCommand.CanExecute(null));
         await vm.StopScanAsync(); await run; Assert.True(received.IsCancellationRequested); Assert.False(vm.Busy);
-        Assert.Contains("arrestata in sicurezza", vm.Status); Assert.True(vm.StartScanCommand.CanExecute(null));
+        Assert.Contains("arrestata in sicurezza", vm.Status); Assert.True(vm.StartScanCommand.CanExecute(null)); Assert.False(vm.StopScanCommand.CanExecute(null));
     });
     [Fact]
-    public async Task ScanRefusesDirtyDraftsExternalConflictsAndAnActiveBackgroundEngine() => await OnSta(async () =>
+    public async Task ScanCancelsUnsavedDraftsAndRefusesExternalConflictsAndAnActiveBackgroundEngine() => await OnSta(async () =>
     {
         using TestFixture f = new(); int launches = 0, stops = 0; bool running = false;
         using EditorViewModel vm = new(new Window(), new FakeStore(), f.History, f.States,
             scanRunner: (_, _, _) => { launches++; return Task.FromResult(new ScanResult(0, "", "")); },
-            workerRunning: () => running, stopWorker: () => { stops++; running = false; return true; });
+            workerRunning: () => running, stopWorker: () => { stops++; running = false; return true; }, confirmScanSave: () => false);
         await vm.InitializeAsync(f.Config); vm.Document!.General.Fields["dry_run"].Flag = true;
-        Assert.False(vm.StartScanCommand.CanExecute(null)); await vm.StartScanAsync(); Assert.Equal(0, launches); Assert.Contains("Salva", vm.Status);
+        Assert.True(vm.StartScanCommand.CanExecute(null)); Assert.False(vm.StopScanCommand.CanExecute(null));
+        await vm.StartScanAsync(); Assert.Equal(0, launches); Assert.Contains("annullata", vm.Status);
         vm.SaveCommand.Execute(null); await Eventually(() => !vm.Busy); running = true;
+        Assert.False(vm.StartScanCommand.CanExecute(null)); Assert.True(vm.StopScanCommand.CanExecute(null));
         await vm.StartScanAsync(); Assert.Equal(0, launches); Assert.Contains("già attivo", vm.Status);
         await vm.StopScanAsync(); Assert.Equal(1, stops); Assert.Contains("Arresto richiesto", vm.Status);
+        Assert.True(vm.StartScanCommand.CanExecute(null)); Assert.False(vm.StopScanCommand.CanExecute(null));
         File.AppendAllText(f.Config, "\n# changed externally\n"); await vm.StartScanAsync(); Assert.Equal(0, launches);
         Assert.Contains("TOML è cambiato", vm.Status);
     });
+    [Fact]
+    public async Task ScanSavesConfirmedDraftBeforeLaunchingAndBlocksReentrantStart() => await OnSta(async () =>
+    {
+        using TestFixture f = new(); string engine = Path.Combine(f.Root, "FileOrganizer.exe"); File.WriteAllText(engine, "test engine");
+        int confirmations = 0, launches = 0;
+        EditorViewModel? editor = null;
+        using EditorViewModel vm = new(new Window(), new FakeStore(), f.History, f.States,
+            workerRunning: () => false, confirmScanSave: () =>
+            {
+                confirmations++; Assert.False(editor!.StartScanCommand.CanExecute(null));
+                Assert.False(editor.StopScanCommand.CanExecute(null));
+                editor.StartScanAsync().GetAwaiter().GetResult(); return true;
+            }, scanRunner: (_, config, _) =>
+            {
+                launches++; Assert.True(ConfigurationLoader.Load(config).General.DryRun);
+                return Task.FromResult(new ScanResult(0, "", ""));
+            });
+        editor = vm; await vm.InitializeAsync(f.Config); vm.EnginePath = engine;
+        vm.RawText = f.Valid.Replace("version=1", "version=1\n[general]\ndry_run = true");
+        Assert.True(vm.StartScanCommand.CanExecute(null)); await vm.StartScanAsync();
+        Assert.Equal(1, confirmations); Assert.Equal(1, launches); Assert.False(vm.IsDirty);
+        Assert.Contains("Simulazione completata", vm.Status); Assert.False(vm.StopScanCommand.CanExecute(null));
+    });
+
+    [Fact]
+    public async Task ScanFailedSaveKeepsDraftAndDiskAndDoesNotLaunch() => await OnSta(async () =>
+    {
+        using TestFixture f = new(); int launches = 0;
+        using EditorViewModel vm = new(new Window(), new FakeStore(), f.History, f.States,
+            workerRunning: () => false, confirmScanSave: () => true,
+            scanRunner: (_, _, _) => { launches++; return Task.FromResult(new ScanResult(0, "", "")); });
+        await vm.InitializeAsync(f.Config); vm.SelectedRule!.Fields["destination"].Text = "";
+        await vm.StartScanAsync(); Assert.Equal(0, launches); Assert.True(vm.IsDirty);
+        Assert.Equal(f.Valid, File.ReadAllText(f.Config)); Assert.Contains("Save failed", vm.Status);
+        Assert.False(vm.Busy); Assert.False(vm.StopScanCommand.CanExecute(null));
+    });
+
+    [Fact]
+    public async Task ScanRechecksWorkerAfterSavingConfirmedDraft() => await OnSta(async () =>
+    {
+        using TestFixture f = new(); bool running = false; int launches = 0;
+        using EditorViewModel vm = new(new Window(), new FakeStore(), f.History, f.States,
+            workerRunning: () => running, confirmScanSave: () => { running = true; return true; },
+            scanRunner: (_, _, _) => { launches++; return Task.FromResult(new ScanResult(0, "", "")); });
+        await vm.InitializeAsync(f.Config); vm.Document!.General.Fields["dry_run"].Flag = true;
+        await vm.StartScanAsync(); Assert.Equal(0, launches); Assert.Contains("già attivo", vm.Status);
+        Assert.False(vm.StartScanCommand.CanExecute(null)); Assert.True(vm.StopScanCommand.CanExecute(null));
+    });
+
+    [Fact]
+    public async Task UnverifiableWorkerStateDisablesBothScanCommandsAndReportsFailure() => await OnSta(async () =>
+    {
+        using TestFixture f = new(); int launches = 0, stops = 0;
+        using EditorViewModel vm = new(new Window(), new FakeStore(), f.History, f.States,
+            workerRunning: () => throw new UnauthorizedAccessException("test denied"),
+            stopWorker: () => { stops++; return true; },
+            scanRunner: (_, _, _) => { launches++; return Task.FromResult(new ScanResult(0, "", "")); });
+        await vm.InitializeAsync(f.Config);
+        Assert.False(vm.StartScanCommand.CanExecute(null)); Assert.False(vm.StopScanCommand.CanExecute(null));
+        await vm.StartScanAsync(); Assert.Contains("test denied", vm.Status);
+        await vm.StopScanAsync(); Assert.Contains("test denied", vm.Status);
+        Assert.Equal(0, launches); Assert.Equal(0, stops);
+    });
+
+    [Fact]
+    public async Task WpfScanButtonsReflectBackgroundWorkerTransitions() => await OnSta(async () =>
+    {
+        using TestFixture f = new(); bool running = false;
+        MainWindow window = new(f.Config, f.History, f.States) { Left = -20000, Top = -20000, ShowInTaskbar = false };
+        window.Show(); EditorViewModel original = (EditorViewModel)window.DataContext;
+        await Eventually(() => original.Document is not null && !original.Busy);
+        using EditorViewModel vm = new(window, new FakeStore(), f.History, f.States,
+            workerRunning: () => running, stopWorker: () => { running = false; return true; }, confirmScanSave: () => false);
+        try
+        {
+            await vm.InitializeAsync(f.Config); window.DataContext = vm;
+            Button start = Descendants<Button>(window).Single(b => Equals(b.Content, "Avvia scansione"));
+            Button stop = Descendants<Button>(window).Single(b => Equals(b.Content, "Arresta scansione"));
+            await Eventually(() => start.IsEnabled && !stop.IsEnabled);
+            running = true; CommandManager.InvalidateRequerySuggested();
+            await Eventually(() => !start.IsEnabled && stop.IsEnabled);
+            System.Windows.Automation.Peers.ButtonAutomationPeer peer = new(stop);
+            ((System.Windows.Automation.Provider.IInvokeProvider)peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)).Invoke();
+            await Eventually(() => start.IsEnabled && !stop.IsEnabled);
+            vm.Document!.General.Fields["dry_run"].Flag = true;
+            await Eventually(() => start.IsEnabled);
+            await vm.StartScanAsync(); Assert.True(vm.IsDirty); Assert.Contains("annullata", vm.Status);
+            Assert.Equal(f.Valid, File.ReadAllText(f.Config));
+        }
+        finally { window.DataContext = original; window.Close(); }
+    });
+
     [Fact]
     public async Task ScanShowsSuccessDryRunAndFailureResults() => await OnSta(async () =>
     {

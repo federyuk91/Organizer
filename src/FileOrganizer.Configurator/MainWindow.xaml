@@ -19,7 +19,7 @@
     <Button Content="Save As…" Command="{Binding SaveAsCommand}"/>
     <Button Content="Reload" Command="{Binding ReloadCommand}"/>
     <Button Content="Validate" Command="{Binding ValidateCommand}"/>
-    <Button Content="Avvia scansione" Command="{Binding StartScanCommand}" ToolTip="Usa il TOML salvato. Salva prima la bozza; il motore deve essere fermo."/>
+    <Button Content="Avvia scansione" Command="{Binding StartScanCommand}" ToolTip="Disponibile a motore fermo. Se la bozza è modificata, chiede di salvarla prima di avviare."/>
     <Button Content="Arresta scansione" Command="{Binding StopScanCommand}" ToolTip="Richiede un arresto sicuro della scansione o del motore in background."/>
     <Button Content="Cancel undo" Command="{Binding CancelUndoCommand}"/>
    </WrapPanel>

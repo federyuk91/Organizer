@@ -107,6 +107,7 @@ public sealed partial class EditorViewModel
                 "ON DISK — " + observed!.Path + "\n" + string.Join("\n", snapshot.Config.Folders.Select(f =>
                     $"{f.Name}: enabled={f.Enabled}; Include subfolders={f.Recursive}; source={f.Path}; path overrides={(f.PathOverrides.IsDefault ? 0 : f.PathOverrides.Length)} (see Managed paths)"));
             runningSnapshot = snapshot.Engine;
+            ObserveWorkerProcess(snapshot.Engine);
             CheckAppliedTree(snapshot.Engine);
             runtimeWarning = snapshot.Engine is null ? "Engine is stopped or its applied settings are not verifiable." :
                 observed is null || !Paths.Comparer.Equals(snapshot.Engine.ConfigPath, observed.Path) ? "WARNING — engine uses another TOML: " + snapshot.Engine.ConfigPath :
@@ -125,7 +126,9 @@ public sealed partial class EditorViewModel
             if (disposed || !ReferenceEquals(observed, file) || version != Volatile.Read(ref verificationVersion)) return;
             diskValid = false; savedSummary = "ON DISK: UNVERIFIED — " + exception.Message; runtimeMessage = "ENGINE: UNVERIFIED"; runtimeWarning = "WARNING — applied settings cannot be verified.";
             CheckAppliedTree(null);
+            ObserveWorkerProcess(null);
             Notify(nameof(SavedSummary)); Notify(nameof(RuntimeMessage)); Notify(nameof(RuntimeWarning)); Notify(nameof(SyncMessage));
+            CommandManager.InvalidateRequerySuggested();
         }
     }
     public async Task RefreshHistoryAsync()
@@ -173,5 +176,5 @@ public sealed partial class EditorViewModel
         finally { undoCancellation.Dispose(); undoCancellation = null; Notify(nameof(HistoryStatus)); Busy = false; }
     }
     private void DisposeCompanions()
-    { owner.Activated -= OnActivated; historyWatcher?.Dispose(); stateWatcher?.Dispose(); undoCancellation?.Cancel(); }
+    { owner.Activated -= OnActivated; historyWatcher?.Dispose(); stateWatcher?.Dispose(); observedWorker?.Dispose(); undoCancellation?.Cancel(); }
 }

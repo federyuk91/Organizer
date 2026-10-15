@@ -18,7 +18,7 @@ Organizza automaticamente i file su **Windows 10/11 x64**, con regole ordinate e
 
 ## Installazione
 
-1. Scarica [FileOrganizer-1.2.4-win-x64-Setup.exe](https://github.com/federyuk91/Organizer/releases/download/v1.2.4/FileOrganizer-1.2.4-win-x64-Setup.exe) dalla [release 1.2.4](https://github.com/federyuk91/Organizer/releases/tag/v1.2.4), insieme al checksum `.sha256`. Compilando il repository, il file viene prodotto in `artifacts/installer/`.
+1. Scarica l’installer Windows x64 dalla sezione [Releases](https://github.com/federyuk91/Organizer/releases), insieme al checksum `.sha256` della stessa versione. Compilando il repository, il setup viene prodotto in `artifacts/installer/`.
 2. Avvia il setup con un doppio clic. Installa motore, configuratore e runtime necessari: sul PC destinatario non servono .NET, PowerShell o Visual Studio.
 3. Mantieni il percorso proposto, `%LOCALAPPDATA%\Programs\FileOrganizer`, oppure scegline uno scrivibile dal tuo utente. L’installazione è per utente e non richiede privilegi amministrativi.
 4. Apri **File Organizer** dal menu Start; puoi scegliere anche il collegamento sul desktop durante il setup.
@@ -98,9 +98,9 @@ Con `recursive=false` e destinazioni `Images` e `Images\AI`, i file direttamente
 
 ## CLI e output
 
-Nella GUI puoi usare **Avvia scansione** per una scansione singola con il TOML salvato e validato. Salva prima le modifiche e risolvi eventuali conflitti. Se il motore è già attivo in background, arrestalo con **Arresta scansione** e attendi che risulti fermo prima di avviare la scansione singola. Il blocco per utente impedisce elaborazioni simultanee anche in caso di clic concorrenti.
+Nella GUI puoi usare **Avvia scansione** per una scansione singola con il TOML salvato e validato. Avvia è disponibile solo a motore fermo; se ci sono modifiche in bozza, chiede di salvarle prima di procedere. No, annullamento del dialogo o salvataggio fallito impediscono l’avvio. Per una nuova configurazione viene richiesto Save As. Risolvi prima eventuali conflitti con il file. Se il motore è già attivo in background, arrestalo con **Arresta scansione** e attendi che risulti fermo prima di avviare la scansione singola. Il blocco per utente impedisce elaborazioni simultanee anche in caso di clic concorrenti.
 
-**Arresta scansione** richiede un arresto sicuro: gli spostamenti già completati restano registrati e non vengono annullati. Per una scansione avviata dalla GUI, il configuratore attende l'uscita del processo senza terminarlo forzatamente. Per un motore già in background invia la richiesta di arresto: usa **Verify state** per verificarne la conclusione. Il motore rimane fermo. Nessun terminale viene aperto e l'esito appare in basso. Con `dry_run=true` viene eseguita una simulazione. Al termine si aggiornano cronologia e stato applicato. I pulsanti non modificano l'avvio automatico di Windows.
+**Arresta scansione** è disponibile solo durante una scansione o con un motore attivo e richiede un arresto sicuro: gli spostamenti già completati restano registrati e non vengono annullati. Per una scansione avviata dalla GUI, il configuratore attende l'uscita del processo senza terminarlo forzatamente. Per un motore già in background invia la richiesta di arresto: usa **Verify state** per verificarne la conclusione. Il motore rimane fermo. Nessun terminale viene aperto e l'esito appare in basso. Con `dry_run=true` viene eseguita una simulazione. Al termine si aggiornano cronologia e stato applicato. I pulsanti non modificano l'avvio automatico di Windows.
 
 Dal terminale, nel percorso di installazione:
 
@@ -164,10 +164,10 @@ Requisiti di sviluppo: Windows x64 e .NET 10 SDK (versione in [global.json](glob
 
 ```powershell
 ./scripts/build.ps1
-./scripts/build-installer.ps1 -Version 1.2.4
+./scripts/build-installer.ps1 -Version 1.2.5
 
 # Fallback senza toolchain C++:
-./scripts/build-installer.ps1 -Version 1.2.4 -EngineMode Standard
+./scripts/build-installer.ps1 -Version 1.2.5 -EngineMode Standard
 
 # Compilatore Inno in un percorso diverso:
 ./scripts/build-installer.ps1 -CompilerPath "C:\tools\Inno Setup 6\ISCC.exe"
@@ -190,7 +190,7 @@ Output in `artifacts/publish/`. Per AOT basta `FileOrganizer.exe`; per motore st
 
 `scripts/build.ps1` compila l’intera soluzione ed esegue i test; `-EngineOnly` esclude WPF. Per includere il test fisico tra volumi, imposta `FILEORGANIZER_TEST_SECOND_VOLUME` su un percorso temporaneo scrivibile in un altro disco. Il test crea e rimuove solo una propria sottocartella univoca. In assenza di questa variabile quel test viene saltato; i test non usano le vere cartelle Download o Desktop.
 
-Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **147 test superati** (127 core/integrazione, 20 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Avvio effettivo al login Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
+Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **152 test superati** (127 core/integrazione, 25 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Avvio effettivo al login Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
 
 Il setup è stato verificato con installazione per utente senza amministratore, collegamenti, motore installato, simulazione, avvio/chiusura GUI, reinstallazione senza perdita del TOML, disinstallazione e rimozione selettiva dell’autorun. Puoi ripetere la prova con `./scripts/verify-installer.ps1`: usa una cartella sotto `artifacts/installer`, crea temporaneamente proprie voci HKCU e le pulisce alla fine. Richiede un account senza installazioni o collegamenti File Organizer preesistenti, per non interferire con l’uso reale. I log restano negli artefatti di verifica.
 

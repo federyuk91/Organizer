@@ -97,7 +97,8 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
     public ICommand RefreshRawCommand { get; }
 
     public EditorViewModel(Window owner, IStartupStore? startupStore = null, MoveHistory? history = null, EngineStateStore? states = null,
-        Func<string, string, CancellationToken, Task<ScanResult>>? scanRunner = null, Func<bool>? workerRunning = null, Func<bool>? stopWorker = null)
+        Func<string, string, CancellationToken, Task<ScanResult>>? scanRunner = null, Func<bool>? workerRunning = null, Func<bool>? stopWorker = null,
+        Func<bool>? confirmScanSave = null)
     {
         this.owner = owner;
         startup = startupStore ?? new RegistryStartupStore();
@@ -126,7 +127,9 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
         enginePath = FindEngine();
         InitializeCompanions(history ?? new MoveHistory(MoveHistory.DefaultDirectory), states ?? new EngineStateStore(EngineStateStore.DefaultDirectory));
         InitializeTree();
-        InitializeScan(scanRunner ?? EngineScan.RunAsync, workerRunning ?? InstanceLease.IsWorkerRunning, stopWorker ?? InstanceLease.RequestStop);
+        InitializeScan(scanRunner ?? EngineScan.RunAsync, workerRunning ?? InstanceLease.IsWorkerRunning, stopWorker ?? InstanceLease.RequestStop,
+            confirmScanSave ?? (() => MessageBox.Show(owner, "Salvare le modifiche in bozza prima di avviare la scansione?\nScegliendo No, la scansione non verrà avviata.",
+                "Salva e avvia scansione", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes));
     }
     public async Task InitializeAsync(string? path)
     {
