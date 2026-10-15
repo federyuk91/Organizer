@@ -1,0 +1,63 @@
+# Example only. Adjust paths before running. This configuration is NOT auto-installed.
+version = 1
+
+[general]
+scan_on_startup = true
+watch_config_changes = true
+log_level = "warning"
+dry_run = false
+file_ready_timeout_seconds = 120
+max_parallel_moves = 2
+
+[[folders]]
+name = "Downloads"
+path = '%USERPROFILE%\Downloads'
+enabled = true
+recursive = false
+
+[folders.duplicates]
+name_collision = "increment"
+identical_content = "copy"
+copy_suffix = "_copy_{n}"
+
+[[folders.rules]]
+name = "Aseprite"
+enabled = true
+extensions = [".ase", ".aseprite"]
+destination = 'Images\Aseprite'
+
+[[folders.rules]]
+name = "Images"
+enabled = true
+extensions = [".png", ".jpg", ".jpeg", ".tiff", ".gif", ".bmp"]
+destination = 'Images'
+
+[[folders.rules]]
+name = "Invoices"
+enabled = true
+patterns = ["*invoice*.pdf", "*fattura*.pdf"]
+exclude_patterns = ["*_draft.pdf"]
+destination = 'Documents\Invoices'
+
+[[folders.rules]]
+name = "Archives"
+enabled = true
+extensions = [".zip", ".7z", ".rar"]
+destination = 'Archives'
+
+[[folders]]
+name = "Desktop"
+path = '%USERPROFILE%\Desktop'
+enabled = false # enable after changing destination to a suitable path
+recursive = false
+
+[folders.duplicates]
+name_collision = "increment"
+identical_content = "skip"
+copy_suffix = "_copy_{n}"
+
+[[folders.rules]]
+name = "Unity Packages"
+enabled = true
+patterns = ["*.unitypackage"]
+destination = 'D:\Unity\Packages'
