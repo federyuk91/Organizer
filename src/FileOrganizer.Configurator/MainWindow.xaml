@@ -19,6 +19,8 @@
     <Button Content="Save As…" Command="{Binding SaveAsCommand}"/>
     <Button Content="Reload" Command="{Binding ReloadCommand}"/>
     <Button Content="Validate" Command="{Binding ValidateCommand}"/>
+    <Button Content="Avvia scansione" Command="{Binding StartScanCommand}" ToolTip="Usa il TOML salvato. Salva prima la bozza; il motore deve essere fermo."/>
+    <Button Content="Arresta scansione" Command="{Binding StopScanCommand}" ToolTip="Richiede un arresto sicuro della scansione o del motore in background."/>
     <Button Content="Cancel undo" Command="{Binding CancelUndoCommand}"/>
    </WrapPanel>
    <TextBox Text="{Binding ConfigPath, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" Padding="0"/>
@@ -55,8 +57,8 @@
          <TextBlock Text="Name"/><TextBox Text="{Binding SelectedFolder.Fields[name].Text, UpdateSourceTrigger=PropertyChanged}"/>
          <TextBlock Text="Source path (environment variables supported)"/>
          <DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseSourceCommand}" Margin="6,2,0,7"/><TextBox Text="{Binding SelectedFolder.Fields[path].Text, UpdateSourceTrigger=PropertyChanged}"/></DockPanel>
-         <WrapPanel><CheckBox Content="Enabled" IsChecked="{Binding SelectedFolder.Fields[enabled].Flag}"/><CheckBox Content="Include subfolders" IsChecked="{Binding SelectedFolder.Fields[recursive].Flag}"/></WrapPanel>
-         <TextBlock Text="Destinations are managed recursively by this folder's rules, including manually placed files. Saving rule changes can reclassify existing files. Relative destinations use this source folder." TextWrapping="Wrap" Foreground="DimGray"/>
+         <WrapPanel><CheckBox Content="Enabled" IsChecked="{Binding SelectedFolder.Fields[enabled].Flag}"/><CheckBox Content="Include subfolders (default; path selections take precedence)" IsChecked="{Binding SelectedFolder.Fields[recursive].Flag}"/></WrapPanel>
+         <TextBlock Text="Include subfolders applies to source AND destinations. When off, only direct files in each configured path are checked. Use Managed paths for individual branch selections. Saving can reclassify existing files." TextWrapping="Wrap" Foreground="DimGray"/>
          <Expander Header="Resolved paths and exclusions" Margin="0,6,0,0"><TextBlock Text="{Binding ResolvedPaths}" TextWrapping="Wrap" Margin="4"/></Expander>
         </StackPanel>
        </GroupBox>
@@ -70,7 +72,12 @@
        </GroupBox>
        <GroupBox Header="Rules — first enabled match wins">
         <StackPanel>
-         <WrapPanel><Button Content="Add" Command="{Binding AddRuleCommand}"/><Button Content="Duplicate" Command="{Binding DuplicateRuleCommand}"/><Button Content="Remove" Command="{Binding RemoveRuleCommand}"/><Button Content="↑ Up" Command="{Binding RuleUpCommand}"/><Button Content="↓ Down" Command="{Binding RuleDownCommand}"/></WrapPanel>
+         <WrapPanel>
+          <ComboBox ItemsSource="{x:Static local:EditorViewModel.RulePresets}" SelectedItem="{Binding SelectedRulePreset}" DisplayMemberPath="Name" Width="150" Height="28" Margin="0,0,6,4" AutomationProperties.Name="Rule template">
+           <ComboBox.ToolTip><TextBlock Text="{Binding SelectedRulePreset.Description}" MaxWidth="440" TextWrapping="Wrap"/></ComboBox.ToolTip>
+          </ComboBox>
+          <Button Content="Add" Command="{Binding AddRuleCommand}"/><Button Content="Duplicate" Command="{Binding DuplicateRuleCommand}"/><Button Content="Remove" Command="{Binding RemoveRuleCommand}"/><Button Content="↑ Up" Command="{Binding RuleUpCommand}"/><Button Content="↓ Down" Command="{Binding RuleDownCommand}"/>
+         </WrapPanel>
          <ListBox ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}" MaxHeight="135" MinHeight="70">
           <ListBox.ItemTemplate><DataTemplate><DockPanel Margin="2"><CheckBox IsChecked="{Binding Fields[enabled].Flag}" Margin="0,0,7,0"/><TextBlock Text="{Binding DisplayName}"/></DockPanel></DataTemplate></ListBox.ItemTemplate>
          </ListBox>
@@ -130,6 +137,29 @@
       <WrapPanel><Button Content="Apply TOML to form" Command="{Binding ApplyRawCommand}"/><Button Content="Refresh from form / discard unapplied text" Command="{Binding RefreshRawCommand}"/></WrapPanel>
      </StackPanel>
      <TextBox Text="{Binding RawText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AcceptsTab="True" FontFamily="Consolas" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap"/>
+    </DockPanel>
+   </TabItem>
+   <TabItem Header="Managed paths">
+    <DockPanel Margin="10">
+     <StackPanel DockPanel.Dock="Top">
+      <TextBlock Text="□ Excluded (gray; children hidden)     ■ Partially included branch     ✓ Complete branch / no subfolders" TextWrapping="Wrap" FontWeight="SemiBold"/>
+      <TextBlock Text="Left: □ → ■ → ✓ → □. Right: □ → ✓ → ■ → □. Without subfolders: □ ↔ ✓ with either click. Each path appears once; configured paths are connected automatically. Intermediate containers can have excluded direct files: see tooltips. Save to apply. Disabled monitors must first be enabled in Folders and rules." TextWrapping="Wrap" Margin="0,5"/>
+      <WrapPanel><ComboBox ItemsSource="{x:Static local:EditorViewModel.PathViews}" SelectedItem="{Binding PathView}" Width="160"/><Button Content="Load / refresh paths" Command="{Binding LoadPathsCommand}"/></WrapPanel>
+      <TextBlock Text="{Binding TreeStatus}" TextWrapping="Wrap" Margin="0,4,0,8"/>
+     </StackPanel>
+     <TreeView ItemsSource="{Binding PathRoots}" Tag="{Binding CanEditTree}" TreeViewItem.Expanded="OnPathExpanded" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+      <TreeView.Resources><Style TargetType="TreeViewItem"><Setter Property="IsExpanded" Value="{Binding Expanded, Mode=TwoWay}"/><Style.Triggers><DataTrigger Binding="{Binding IsOff}" Value="True"><Setter Property="Foreground" Value="Gray"/></DataTrigger></Style.Triggers></Style></TreeView.Resources>
+      <TreeView.ItemTemplate>
+       <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+        <StackPanel Orientation="Horizontal" ToolTip="{Binding Description}">
+         <Button Content="{Binding Symbol}" Width="32" Padding="2" Margin="0,1,6,1" FontSize="16" Click="OnPathLeftClick" PreviewMouseRightButtonUp="OnPathRightClick" AutomationProperties.Name="{Binding Label}">
+          <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="IsEnabled" Value="{Binding CanCycle}"/><Style.Triggers><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=TreeView}}" Value="False"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></Button.Style>
+         </Button>
+         <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+        </StackPanel>
+       </HierarchicalDataTemplate>
+      </TreeView.ItemTemplate>
+     </TreeView>
     </DockPanel>
    </TabItem>
    <TabItem Header="History">

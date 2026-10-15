@@ -110,6 +110,22 @@ public static class Paths
                 if (!ReferenceEquals(source, other) && (Comparer.Equals(source.Path, other.Path) ||
                     source.Recursive && Within(other.Path, source.Path) || other.Recursive && Within(source.Path, other.Path)))
                     throw new ConfigException("Duplicate/overlapping monitors: " + source.Name + ", " + other.Name);
+            foreach (PathOverride selection in source.PathOverrides.IsDefault ? [] : source.PathOverrides)
+            foreach (Folder other in sources.Where(f => !ReferenceEquals(f, source)))
+            {
+                if (selection.Mode != DirectoryMode.Off && (Comparer.Equals(selection.Path, other.Path) ||
+                    selection.Mode == DirectoryMode.Recursive && Within(other.Path, selection.Path)))
+                    throw new ConfigException("Path selection overlaps another monitor: " + selection.Path);
+                if (selection.Mode == DirectoryMode.Off) continue;
+                if (other.Rules.Where(r => r.Enabled).Any(r => Within(selection.Path, r.Destination) ||
+                    selection.Mode == DirectoryMode.Recursive && Within(r.Destination, selection.Path)))
+                    throw new ConfigException("Path selection overlaps another monitor's destination: " + selection.Path);
+                foreach (PathOverride otherSelection in other.PathOverrides.IsDefault ? [] : other.PathOverrides)
+                    if (otherSelection.Mode != DirectoryMode.Off && (Comparer.Equals(selection.Path, otherSelection.Path) ||
+                        selection.Mode == DirectoryMode.Recursive && Within(otherSelection.Path, selection.Path) ||
+                        otherSelection.Mode == DirectoryMode.Recursive && Within(selection.Path, otherSelection.Path)))
+                        throw new ConfigException("Overlapping path selections: " + selection.Path);
+            }
         }
         foreach (string destination in config.Destinations)
         {

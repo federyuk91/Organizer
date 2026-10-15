@@ -7,6 +7,28 @@ namespace FileOrganizer.Tests;
 public sealed class EngineStateTests
 {
     [WindowsFact]
+    public void AppliedTreeSnapshotIncludesOverridesAndRetainedSessionDestinations()
+    {
+        using Fixture f = new(); string child = Path.Combine(f.Source, "selected");
+        string text = f.Text().Replace("[folders.duplicates]", $"direct_paths=['{child}']\n[folders.duplicates]");
+        Configuration first = ConfigurationLoader.Parse(text); ManagedDirectories prior = new(first);
+        string changed = text.Replace(f.Destination, Path.Combine(f.Root, "new-out")); Configuration config = ConfigurationLoader.Parse(changed);
+        ManagedDirectories managed = new(config, prior); EngineStateStore states = new(Path.Combine(f.Root, "state"));
+        states.Write(states.Create(f.ConfigPath, changed, config, managed));
+        EngineSnapshot snapshot = states.Read()!; Assert.Equal(2, snapshot.Version);
+        Assert.Contains(f.Destination, snapshot.Folders[0].Destinations!);
+        Assert.Contains(Path.Combine(f.Root, "new-out"), snapshot.Folders[0].Destinations!);
+        Assert.Equal(child, Assert.Single(snapshot.Folders[0].PathOverrides!).Path);
+    }
+    [WindowsFact]
+    public void ProtectedOrReusedProcessIsUnverifiableWithoutLeakingPlatformExceptions()
+    {
+        using Fixture f = new(); EngineStateStore states = new(Path.Combine(f.Root, "state"));
+        states.Write(states.Create(f.ConfigPath, f.Text(), f.Config()) with { Pid = 4 });
+        Exception? error = Record.Exception(() => states.Read());
+        Assert.True(error is null or IOException, error?.ToString());
+    }
+    [WindowsFact]
     public void SnapshotRejectsStaleProcessIdentityAndMalformedData()
     {
         using Fixture f = new(); EngineStateStore states = new(Path.Combine(f.Root, "state"));

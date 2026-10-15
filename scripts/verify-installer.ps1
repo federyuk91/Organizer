@@ -1,5 +1,5 @@
 param(
-    [string]$InstallerPath = 'artifacts/installer/FileOrganizer-1.1.0-win-x64-Setup.exe',
+    [string]$InstallerPath = 'artifacts/installer/FileOrganizer-1.2.4-win-x64-Setup.exe',
     [switch]$Isolated,
     [string]$CompilerPath
 )

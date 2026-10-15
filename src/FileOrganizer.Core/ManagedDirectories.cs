@@ -2,7 +2,10 @@ using System.Collections.Immutable;
 
 namespace FileOrganizer.Core;
 
-public sealed record ManagedFolder(Folder Folder, ImmutableArray<string> Destinations, ImmutableArray<string> Roots);
+public sealed record ManagedFolder(Folder Folder, ImmutableArray<string> Destinations, ImmutableArray<string> Roots)
+{
+    public DirectoryScope Selection { get; } = new(Folder, Destinations);
+}
 
 // Directory ownership is configuration/session state, never file provenance.
 public sealed class ManagedDirectories
@@ -20,12 +23,12 @@ public sealed class ManagedDirectories
             IEnumerable<string> current = folder.Rules.Where(r => r.Enabled).Select(r => r.Destination);
             ManagedFolder? old = previous?.Folders.FirstOrDefault(f => Paths.Comparer.Equals(f.Folder.Path, folder.Path));
             ImmutableArray<string> destinations = current.Concat(old?.Destinations ?? []).Distinct(Paths.Comparer).ToImmutableArray();
-            ImmutableArray<string> roots = destinations.Where(d => !destinations.Any(other => !Paths.Comparer.Equals(other, d) && Paths.Within(d, other))).ToImmutableArray();
+            ImmutableArray<string> roots = new DirectoryScope(folder, destinations).ActiveRoots.ToImmutableArray();
             folders.Add(new ManagedFolder(folder, destinations, roots));
         }
         Folders = folders.ToImmutable();
         ValidateOwnership(Folders, configuration);
-        WatchRoots = Folders.SelectMany(f => f.Roots.Prepend(f.Folder.Path)).Distinct(Paths.Comparer).ToImmutableArray();
+        WatchRoots = Folders.SelectMany(f => f.Roots).Distinct(Paths.Comparer).ToImmutableArray();
     }
 
     internal static void ValidateDestinations(Configuration config)
@@ -51,28 +54,31 @@ public sealed class ManagedDirectories
     }
     public Folder? Owner(string path)
     {
+        string? directory = Path.GetDirectoryName(path);
+        if (directory is null) return null;
         foreach (ManagedFolder folder in Folders)
-            if (folder.Roots.Any(root => Paths.Within(path, root))) return folder.Folder;
+            if (folder.Destinations.Any(root => Paths.Within(path, root)))
+                return folder.Selection.Mode(directory) != DirectoryMode.Off ? folder.Folder : null;
         foreach (ManagedFolder folder in Folders)
-            if (!Paths.Comparer.Equals(path, folder.Folder.Path) && Paths.Within(path, folder.Folder.Path) &&
-                (folder.Folder.Recursive || Paths.Comparer.Equals(Path.GetDirectoryName(path), folder.Folder.Path))) return folder.Folder;
+            if (!Paths.Comparer.Equals(path, folder.Folder.Path) && folder.Selection.Mode(directory) != DirectoryMode.Off) return folder.Folder;
         return null;
     }
+    public bool RecursiveAt(string path) => Folders.Any(f => f.Selection.Mode(path) == DirectoryMode.Recursive);
     public static bool AlreadyPlaced(string path, Rule rule) => Paths.Comparer.Equals(Path.GetDirectoryName(path), rule.Destination);
-    public bool IsKnownDirectory(string path) => Folders.Any(f => Paths.Comparer.Equals(path, f.Folder.Path) || f.Destinations.Contains(path, Paths.Comparer));
+    public bool IsKnownDirectory(string path) => WatchRoots.Contains(path, Paths.Comparer);
     public bool AffectsWatchRoot(string path) => WatchRoots.Any(root => Paths.Within(root, path));
 
     public IEnumerable<string> Snapshot(Folder folder, string? configPath = null)
     {
         ManagedFolder scope = Folders.First(f => ReferenceEquals(f.Folder, folder));
-        foreach (string file in Enumerate(folder.Path, folder.Recursive, false, folder, configPath)) yield return file;
+        DirectoryScope selection = scope.Selection;
         foreach (string root in scope.Roots)
         {
             if (!Directory.Exists(root)) continue;
-            foreach (string file in Enumerate(root, true, true, folder, configPath)) yield return file;
+            foreach (string file in Enumerate(root, selection, folder, configPath)) yield return file;
         }
     }
-    private IEnumerable<string> Enumerate(string root, bool recursive, bool managed, Folder owner, string? configPath)
+    private IEnumerable<string> Enumerate(string root, DirectoryScope selection, Folder owner, string? configPath)
     {
         Stack<string> pending = new(); pending.Push(root);
         while (pending.TryPop(out string? directory))
@@ -88,7 +94,9 @@ public sealed class ManagedDirectories
                 if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
                 if ((attributes & FileAttributes.Directory) != 0)
                 {
-                    if (recursive && (managed || !Folders.Any(f => f.Roots.Any(d => Paths.Within(entry, d))))) pending.Push(entry);
+                    if (selection.Mode(directory) == DirectoryMode.Recursive && selection.Mode(entry) != DirectoryMode.Off &&
+                        !selection.ExplicitRoots.Contains(entry, Paths.Comparer) &&
+                        !Folders.Any(f => !ReferenceEquals(f.Folder, owner) && f.Destinations.Any(d => Paths.Within(entry, d)))) pending.Push(entry);
                 }
                 else if (ReferenceEquals(Owner(entry), owner)) yield return entry;
             }

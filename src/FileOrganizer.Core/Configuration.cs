@@ -13,8 +13,10 @@ public sealed record DuplicatePolicy(NameCollision NameCollision = NameCollision
     IdenticalContent IdenticalContent = IdenticalContent.Copy, string CopySuffix = "_copy_{n}");
 public sealed record Rule(string Name, bool Enabled, string Destination, ImmutableArray<string> Extensions,
     ImmutableArray<string> Patterns, ImmutableArray<string> Exclusions, bool CaseSensitive);
+public enum DirectoryMode { Off, Direct, Recursive }
+public sealed record PathOverride(string Path, DirectoryMode Mode);
 public sealed record Folder(string Name, string Path, bool Enabled, bool Recursive,
-    DuplicatePolicy Duplicates, ImmutableArray<Rule> Rules);
+    DuplicatePolicy Duplicates, ImmutableArray<Rule> Rules, ImmutableArray<PathOverride> PathOverrides = default);
 public sealed record Configuration(General General, ImmutableArray<Folder> Folders)
 {
     public IEnumerable<string> Destinations => Folders.Where(f => f.Enabled)
@@ -46,7 +48,7 @@ public static class ConfigurationLoader
         HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
         foreach (TomlTable table in folders)
         {
-            CheckKeys(table, "folder", "name", "path", "enabled", "recursive", "duplicates", "rules");
+            CheckKeys(table, "folder", "name", "path", "enabled", "recursive", "duplicates", "rules", "direct_paths", "recursive_paths", "excluded_paths");
             string name = Get<string>(table, "name", "folder");
             if (!names.Add(name)) throw new ConfigException($"folders.{name}: duplicate name");
             string source = Paths.Normalize(Get<string>(table, "path", name));
@@ -79,7 +81,21 @@ public static class ConfigurationLoader
                 rules.Add(new Rule(ruleName, Bool(item, "enabled", true), Paths.Normalize(Get<string>(item, "destination", ruleName), source),
                     extensions, patterns, excludes, Bool(item, "case_sensitive", false)));
             }
-            result.Add(new Folder(name, source, Bool(table, "enabled", true), Bool(table, "recursive", false), policy, rules.ToImmutable()));
+            ImmutableArray<PathOverride>.Builder overrides = ImmutableArray.CreateBuilder<PathOverride>();
+            HashSet<string> selectedPaths = new(Paths.Comparer);
+            foreach ((string key, DirectoryMode mode) in new[] { ("direct_paths", DirectoryMode.Direct), ("recursive_paths", DirectoryMode.Recursive), ("excluded_paths", DirectoryMode.Off) })
+            foreach (string raw in Strings(table, key))
+            {
+                string path = Paths.NormalizeLiteral(raw, source);
+                if (!selectedPaths.Add(path)) throw new ConfigException(name + ": duplicate path selection: " + path);
+                if (!Paths.Within(path, source) && !rules.Any(r => Paths.Within(path, r.Destination)))
+                    throw new ConfigException(name + ": path selection outside source/destinations: " + path);
+                if (File.Exists(path)) throw new ConfigException(name + ": selected path is a file: " + path);
+                overrides.Add(new(path, mode));
+            }
+            if (overrides.Any(p => p.Mode != DirectoryMode.Off && overrides.Any(o => o.Mode == DirectoryMode.Off && Paths.Within(p.Path, o.Path))))
+                throw new ConfigException(name + ": an active path cannot be below an excluded path");
+            result.Add(new Folder(name, source, Bool(table, "enabled", true), Bool(table, "recursive", false), policy, rules.ToImmutable(), overrides.ToImmutable()));
         }
         Configuration config = new(settings, result.ToImmutable());
         Paths.Validate(config);

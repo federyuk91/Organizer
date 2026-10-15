@@ -26,6 +26,7 @@ public sealed class WorkerHost : IAsyncDisposable
     private int reloadRequested, recoveryRequested, refreshRequested, failures, rejectedConfigurations, watcherRecoveries, reconciliations;
     private ManagedDirectories CurrentScope => Volatile.Read(ref current);
     public Configuration Current => CurrentScope.Configuration;
+    public ManagedDirectories Managed => CurrentScope;
     public int Failures => Volatile.Read(ref failures);
     public int RejectedConfigurations => Volatile.Read(ref rejectedConfigurations);
     public int WatcherRecoveries => Volatile.Read(ref watcherRecoveries);
@@ -46,6 +47,8 @@ public sealed class WorkerHost : IAsyncDisposable
             await ScanSnapshotAsync(CurrentScope, lifetime.Token);
             queue.Writer.TryComplete();
             await Task.WhenAll(workers);
+            if (HistoryFailed) return 3;
+            if (lifetime.IsCancellationRequested) return 130;
             return Failures == 0 ? 0 : 3;
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { return HistoryFailed ? 3 : 130; }
@@ -143,9 +146,7 @@ public sealed class WorkerHost : IAsyncDisposable
                 if (existing is null) { unavailable = true; continue; }
                 Paths.NoReparse(existing);
                 // Missing destinations watch their nearest existing ancestor nonrecursively until created.
-                bool recursive = Paths.Comparer.Equals(existing, root) &&
-                    (scope.Folders.Any(f => f.Roots.Contains(root, Paths.Comparer)) ||
-                    scope.Folders.Any(f => Paths.Comparer.Equals(f.Folder.Path, root) && f.Folder.Recursive));
+                bool recursive = Paths.Comparer.Equals(existing, root) && scope.RecursiveAt(root);
                 requested[existing] = recursive || requested.GetValueOrDefault(existing);
                 // Observe root rename/recreation even when its old recursive handle remains valid.
                 string? parent = Path.GetDirectoryName(root);
@@ -248,7 +249,7 @@ public sealed class WorkerHost : IAsyncDisposable
                     {
                         if (Directory.Exists(work.Path))
                         {
-                            bool recursiveScope = work.Folder.Recursive || work.Scope.Folders.Any(f => f.Roots.Any(root => Paths.Within(work.Path, root)));
+                            bool recursiveScope = work.Scope.RecursiveAt(work.Path);
                             if (work.DiscoverDirectory && recursiveScope) Reconcile();
                             continue;
                         }

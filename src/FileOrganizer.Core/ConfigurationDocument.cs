@@ -155,6 +155,7 @@ public sealed class ConfigurationDocument
         if (folder)
         {
             Field("path", FieldKind.Text, ""); Field("recursive", FieldKind.Boolean, "false");
+            Field("direct_paths", FieldKind.List, ""); Field("recursive_paths", FieldKind.List, ""); Field("excluded_paths", FieldKind.List, "");
             Field("duplicates.name_collision", FieldKind.Text, "increment");
             Field("duplicates.identical_content", FieldKind.Text, "copy");
             Field("duplicates.copy_suffix", FieldKind.Text, "_copy_{n}");

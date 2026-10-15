@@ -105,8 +105,9 @@ public sealed partial class EditorViewModel
             diskValid = snapshot.Config is not null;
             savedSummary = snapshot.Config is null ? "ON DISK: missing or invalid configuration; do not assume the engine uses the form values." :
                 "ON DISK — " + observed!.Path + "\n" + string.Join("\n", snapshot.Config.Folders.Select(f =>
-                    $"{f.Name}: enabled={f.Enabled}; Include subfolders={f.Recursive}; source={f.Path}"));
+                    $"{f.Name}: enabled={f.Enabled}; Include subfolders={f.Recursive}; source={f.Path}; path overrides={(f.PathOverrides.IsDefault ? 0 : f.PathOverrides.Length)} (see Managed paths)"));
             runningSnapshot = snapshot.Engine;
+            CheckAppliedTree(snapshot.Engine);
             runtimeWarning = snapshot.Engine is null ? "Engine is stopped or its applied settings are not verifiable." :
                 observed is null || !Paths.Comparer.Equals(snapshot.Engine.ConfigPath, observed.Path) ? "WARNING — engine uses another TOML: " + snapshot.Engine.ConfigPath :
                 snapshot.Engine.ConfigHash != diskHash ? "WARNING — the engine has NOT applied the current saved file." : "";
@@ -116,13 +117,14 @@ public sealed partial class EditorViewModel
                 (observed is null || !Paths.Comparer.Equals(snapshot.Engine.ConfigPath, observed.Path) ? "WARNING: engine uses ANOTHER TOML. " :
                     snapshot.Engine.ConfigHash != diskHash ? "WARNING: engine has NOT applied the current file. " : "Applied snapshot matches this file. ") +
                 (snapshot.Engine.ReloadError is null ? "" : "Reload rejected: " + snapshot.Engine.ReloadError + ". ") +
-                string.Join("; ", snapshot.Engine.Folders.Select(f => $"{f.Name}: enabled={f.Enabled}, Include subfolders={f.Recursive}"));
+                string.Join("; ", snapshot.Engine.Folders.Select(f => $"{f.Name}: enabled={f.Enabled}, Include subfolders={f.Recursive}, path overrides={f.PathOverrides?.Length ?? 0} (see Managed paths)"));
             Notify(nameof(SavedSummary)); Notify(nameof(RuntimeMessage)); Notify(nameof(RuntimeWarning)); Notify(nameof(SyncMessage)); CommandManager.InvalidateRequerySuggested();
         }
         catch (Exception exception) when (Expected(exception))
         {
             if (disposed || !ReferenceEquals(observed, file) || version != Volatile.Read(ref verificationVersion)) return;
             diskValid = false; savedSummary = "ON DISK: UNVERIFIED — " + exception.Message; runtimeMessage = "ENGINE: UNVERIFIED"; runtimeWarning = "WARNING — applied settings cannot be verified.";
+            CheckAppliedTree(null);
             Notify(nameof(SavedSummary)); Notify(nameof(RuntimeMessage)); Notify(nameof(RuntimeWarning)); Notify(nameof(SyncMessage));
         }
     }

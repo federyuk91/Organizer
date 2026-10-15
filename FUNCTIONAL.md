@@ -28,7 +28,7 @@ MAIN(args):
   if run: acquire single-instance lock scoped to config path
   initialize bounded logger, queue, workers, watchers (run only)
   if scan OR (run AND scan_on_startup):
-    enumerate source files and owned managed destination trees once each,
+    enumerate direct files in each active source/destination/selected path once; descend only where its effective mode is recursive,
     respecting source recursion, ownership and reparse exclusions
     enqueue each once
   if scan: drain finite queue; exit with meaningful error status
@@ -149,3 +149,11 @@ Undo acquires the per-user instance lease after the GUI requests safe shutdown. 
 ## F-11 — Configuration display synchronization
 
 The editor keeps a draft and an independently verified disk summary. File events and window activation refresh disk state; clean drafts reload automatically, dirty drafts retain their contents and disable overwrite. After saving, reopen the actual file. The worker publishes atomic diagnostic snapshots for accepted configuration text and rejected reloads. The GUI verifies process start identity and compares text hashes, showing disk and applied recursive flags separately. Unknown/missing state is explicit. History refresh is event-notified and user-triggered; there is no idle polling.
+
+## F-12 — Directory selection and lazy path tree
+
+Resolve each directory with the shared DirectoryScope policy. An excluded ancestor vetoes the entire subtree. Otherwise use the most specific override: recursive inherits to all descendants, direct does not inherit. Without overrides, source and each enabled explicit destination use the folder recursive default. Scan active explicit roots independently, skipping roots during ancestor traversal to avoid duplicates; enforce the same admission on watcher events and immediately before transfers. Prior session destinations obey the same policy and are included in applied diagnostic snapshots.
+
+Tree states are off (gray, no descendant nodes), direct/partial (filled square), and complete recursive (check). Off → direct loads only immediate child names, not descendants, without selecting children. Full/off choices discard descendant overrides; direct also resets descendant selection so future children stay excluded. Left click cycles off/direct/full/off; right click reverses it. A recursive node with exceptions displays partial. The editable tree is a draft; saved and live-process views are read-only and marked stale on changes. No timer enumerates the filesystem. Reparse points are always excluded.
+
+Directories verified to have no subfolders display only off/complete and toggle between those states in either direction. Existing direct selection is complete for current files; future subfolders still follow the saved mode. Detect leaves with a one-level query, on demand, without periodic enumeration. Deduplicate canonical paths across all monitors; nest known roots beneath the shortest configured ancestor and open only configured chains. Intermediate unmonitored containers show their explicitly managed descendants without enumerating other contents or enabling direct-file processing; their tooltip explains this distinction.

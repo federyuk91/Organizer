@@ -1,5 +1,6 @@
 # Example only. Adjust paths before running. This configuration is NOT auto-installed.
-# Destinations are also reconciled recursively, including manually placed files.
+# Sources and explicit destinations share the recursive default below.
+# With recursive=false, nested projects are excluded; only direct files are checked.
 # Changing rule priority may move files that are already organized.
 version = 1
 
@@ -16,6 +17,12 @@ name = "Downloads"
 path = '%USERPROFILE%\Downloads'
 enabled = true
 recursive = false
+# Optional per-path selections (literal absolute paths or relative to this source).
+# Off hides/excludes its entire subtree; direct includes only files at that path.
+# Selecting a branch recursively includes future descendants. More specific selections override it.
+direct_paths = []
+recursive_paths = []
+excluded_paths = []
 
 [folders.duplicates]
 name_collision = "increment"

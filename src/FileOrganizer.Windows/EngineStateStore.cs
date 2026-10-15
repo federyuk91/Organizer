@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -7,7 +8,8 @@ using Microsoft.Win32.SafeHandles;
 
 namespace FileOrganizer.Windows;
 
-public sealed record RuntimeFolder(string Name, string Path, bool Enabled, bool Recursive);
+public sealed record RuntimeFolder(string Name, string Path, bool Enabled, bool Recursive,
+    string[]? Destinations = null, PathOverride[]? PathOverrides = null);
 public sealed record EngineSnapshot(int Pid, long StartedUtcTicks, string Executable, string ConfigPath, string ConfigHash,
     RuntimeFolder[] Folders, string? ReloadError = null, int Version = 1);
 
@@ -16,11 +18,14 @@ public sealed class EngineStateStore(string directory)
     public static string DefaultDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FileOrganizer");
     public string FilePath { get; } = Path.Combine(Path.GetFullPath(directory), "engine-state.json");
     public static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
-    public EngineSnapshot Create(string configPath, string text, Configuration config)
+    public EngineSnapshot Create(string configPath, string text, Configuration config, ManagedDirectories? managed = null)
     {
         using Process process = Process.GetCurrentProcess();
         return new(process.Id, process.StartTime.ToUniversalTime().Ticks, Environment.ProcessPath ?? "", configPath, Hash(text),
-            config.Folders.Select(f => new RuntimeFolder(f.Name, f.Path, f.Enabled, f.Recursive)).ToArray());
+            config.Folders.Select(f => new RuntimeFolder(f.Name, f.Path, f.Enabled, f.Recursive,
+                (managed?.Folders.FirstOrDefault(m => ReferenceEquals(m.Folder, f))?.Destinations ??
+                    f.Rules.Where(r => r.Enabled).Select(r => r.Destination).ToImmutableArray()).ToArray(),
+                (f.PathOverrides.IsDefault ? [] : f.PathOverrides).ToArray())).ToArray(), Version: 2);
     }
     public void Write(EngineSnapshot snapshot)
     {
@@ -51,7 +56,7 @@ public sealed class EngineStateStore(string directory)
         using FileStream stream = new(FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         EngineSnapshot? snapshot = JsonSerializer.Deserialize(stream, OperationJson.Default.EngineSnapshot);
         if (snapshot is null) return null;
-        if (snapshot.Version != 1 || snapshot.Pid <= 0 || snapshot.StartedUtcTicks <= 0 || snapshot.Folders is null ||
+        if (snapshot.Version is not (1 or 2) || snapshot.Pid <= 0 || snapshot.StartedUtcTicks <= 0 || snapshot.Folders is null ||
             string.IsNullOrWhiteSpace(snapshot.Executable) || string.IsNullOrWhiteSpace(snapshot.ConfigPath) || snapshot.ConfigHash is null || snapshot.ConfigHash.Length != 64 ||
             snapshot.Folders.Any(f => f is null || string.IsNullOrWhiteSpace(f.Path) || string.IsNullOrWhiteSpace(f.Name))) throw new IOException("Invalid engine status");
         if (!verifyProcess) return snapshot;
@@ -62,6 +67,8 @@ public sealed class EngineStateStore(string directory)
         }
         catch (ArgumentException) { return null; }
         catch (InvalidOperationException) { return null; }
+        catch (System.ComponentModel.Win32Exception exception)
+        { throw new IOException("Cannot verify the engine process identity; applied settings are unavailable.", exception); }
     }
     public void Clear(EngineSnapshot owner)
     {

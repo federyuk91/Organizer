@@ -15,7 +15,7 @@ Organizza automaticamente i file su **Windows 10/11 x64**, con regole ordinate e
 
 ## Installazione
 
-1. Scarica `FileOrganizer-1.1.0-win-x64-Setup.exe` dalla sezione [Releases](https://github.com/federyuk91/Organizer/releases), quando disponibile. Compilando il repository, il file viene prodotto in `artifacts/installer/`.
+1. Scarica `FileOrganizer-1.2.4-win-x64-Setup.exe` dalla sezione [Releases](https://github.com/federyuk91/Organizer/releases), quando disponibile. Compilando il repository, il file viene prodotto in `artifacts/installer/`.
 2. Avvia il setup con un doppio clic. Installa motore, configuratore e runtime necessari: sul PC destinatario non servono .NET, PowerShell o Visual Studio.
 3. Mantieni il percorso proposto, `%LOCALAPPDATA%\Programs\FileOrganizer`, oppure scegline uno scrivibile dal tuo utente. L’installazione è per utente e non richiede privilegi amministrativi.
 4. Apri **File Organizer** dal menu Start; puoi scegliere anche il collegamento sul desktop durante il setup.
@@ -30,10 +30,10 @@ Il setup non crea una configurazione attiva, non avvia il motore e non registra 
 2. Scegli la sorgente con **Browse**, abilitala e configura le regole. La prima regola attiva che corrisponde determina la destinazione. Estensioni e pattern, se entrambi specificati, devono entrambi corrispondere.
 3. Usa **Filename Preview** e **Validate** per controllare filtri e percorsi.
 4. Salva con **Save As** in `%LOCALAPPDATA%\FileOrganizer\config.toml`. Crea la cartella `FileOrganizer` se il dialogo lo richiede.
-5. Dal menu Start, apri **File Organizer → Scansione adesso**. Con la simulazione attiva non viene spostato nulla. Per leggere l’output anche dopo la fine del comando, vedi gli esempi CLI sotto.
+5. Premi **Avvia scansione** nella GUI. Con la simulazione attiva non viene spostato nulla; l'esito appare in basso. È disponibile anche **Scansione adesso** dal menu Start.
 6. Dopo la verifica, disattiva `dry_run`, salva e usa **Avvia organizzazione** per il monitoraggio continuo. La finestra del motore deve restare aperta; `Ctrl+C` lo arresta.
 
-I collegamenti **Scansione adesso** e **Avvia organizzazione** usano la configurazione predefinita sopra indicata. Per un altro TOML, usa la CLI con `--config`. La GUI modifica la configurazione, ma non contiene un pulsante di scansione e non avvia il motore.
+I collegamenti **Scansione adesso** e **Avvia organizzazione** usano la configurazione predefinita sopra indicata. La GUI può avviare una scansione singola con il TOML aperto e salvato; per il monitoraggio continuo usa **Avvia organizzazione** o la CLI con `--config`.
 
 ### Avvio con Windows
 
@@ -61,15 +61,41 @@ Per una sorgente `Downloads`, le destinazioni relative vengono risolte rispetto 
 
 Più pattern nella stessa regola sono alternative. I file senza corrispondenza rimangono dove sono. [Config.Example.toml](Config.Example.toml) contiene un esempio completo con variabili d’ambiente.
 
+### Aggiunta rapida delle regole
+
+Nel menu a sinistra di **Add**, **New rules** crea la consueta regola vuota. **Images**, **Documents**, **Archives**, **Videos**, **Audio** e **3D** precompilano nome ed estensioni della nuova regola solo quando premi **Add**. Il tooltip mostra l'elenco completo dei formati; puoi sempre modificarli. Le categorie comprendono immagini comuni/RAW e PSD/Aseprite, documenti Office/OpenDocument/PDF/e-book, archivi compressi, video, audio, modelli/scenari e CAD 3D. Scegli la destinazione prima di salvare: resta vuota. Le regole vengono aggiunte in fondo, mantenendo la priorità di quelle esistenti.
+
+Sono disponibili anche **Installers**, **Fonts**, **E-books**, **Subtitles**, **Torrents**, **Unity Packages**, **Source Code** e **Graphic Projects**. Per dare precedenza alle categorie specifiche, sposta E-books sopra Documents e Graphic Projects sopra Images.
+
 ### Riclassificazione
 
-Aggiungendo una regola `*gatt*` prima della regola generica delle immagini, con destinazione `Images\Cats`, vengono spostati anche i file corrispondenti già in `Images` e nelle sue sottocartelle. Riportando la regola generica al primo posto, tornano in `Images`.
+Aggiungendo una regola `*gatt*` prima della regola generica delle immagini, con destinazione `Images\Cats`, vengono spostati anche i file corrispondenti già nei percorsi inclusi di `Images`. Riportando la regola generica al primo posto, tornano in `Images`.
 
-Le destinazioni sono sempre gestite ricorsivamente, anche se la sorgente ha `recursive=false`. I file inseriti manualmente seguono le stesse regole; non esiste un archivio della loro provenienza. I file già direttamente nella destinazione vincente vengono ignorati prima di attese e hash, evitando copie o cancellazioni su se stessi.
+Dalla versione 1.2.0, `recursive=false` limita sia sorgente sia ogni destinazione esplicita ai file direttamente presenti: un progetto annidato in `Images\AI` rimane intatto. `recursive=true` include anche le sottocartelle. Le selezioni individuali di **Managed paths** hanno precedenza sul valore predefinito. I file inseriti manualmente seguono le stesse regole; non esiste un archivio della loro provenienza. I file già direttamente nella destinazione vincente vengono ignorati prima di attese e hash, evitando copie o cancellazioni su se stessi.
 
 Salvare nuove regole può quindi spostare subito file già organizzati, se il motore è attivo e osserva il TOML. Un cambiamento di destinazione mantiene gestita quella precedente per la sessione corrente. Dopo un riavvio rimangono gestite solo le destinazioni attuali o quelle ancora coperte da una sorgente ricorsiva/destinazione attiva. Destinazioni sovrapposte appartenenti a monitor diversi vengono rifiutate. Se un suffisso generato per un duplicato cambia la destinazione vincente, il file sorgente viene preservato e il conflitto segnalato nel log.
 
+## Albero dei percorsi (1.2.0)
+
+Apri **Managed paths** e scegli **Draft**, **Saved file** o **Applied engine**, poi **Load / refresh paths**. Le ultime due viste sono in sola lettura; quella applicata include anche le vecchie destinazioni ancora gestite nella sessione. Con motore fermo o precedente alla 1.2.0, il suo ambito è dichiarato non verificabile.
+
+| Simbolo | Ambito |
+|---|---|
+| □ grigio | Disattivo: nessuna esplorazione dei discendenti, che restano nascosti. |
+| ■ | File diretti e singoli rami eventualmente selezionati; non tutto il sottoalbero. |
+| ✓ | Tutto il sottoalbero ricorsivamente, comprese nuove sottocartelle. |
+
+Se una cartella non contiene sottocartelle, entrambi i clic alternano soltanto **□ ↔ ✓**. Una cartella già inclusa direttamente appare completa finché non ha sottocartelle; eventuali nuove cartelle seguono il modo salvato nel TOML. Negli altri casi, clic sinistro (o Spazio): **□ → ■ → ✓ → □**. Clic destro: **□ → ✓ → ■ → □**. Attivando un ramo escluso in modalità ■ vengono mostrate solo le sue sottocartelle immediate, senza attivarle. ✓ e □ sostituiscono le selezioni sottostanti; un'eccezione in un ramo ricorsivo fa apparire il simbolo ■. Espandi gli altri rami su richiesta: nessuna scansione profonda automatica della GUI o polling.
+
+L'albero elenca sorgenti, destinazioni esplicite e percorsi selezionati, anche se annidati: ogni percorso compare una sola volta, sotto la radice configurata più breve. La catena fino alle destinazioni annidate si apre automaticamente, anche con più monitor. I livelli intermedi che collegano destinazioni esplicite non abilitano il monitoraggio dei propri file: il tooltip lo indica; vengono collegati solo i percorsi noti dal TOML. I clic modificano la **bozza**; premi **Save** per validarla e applicarla. Un monitor globalmente disabilitato va prima abilitato in **Folders and rules**: l'albero non lo riattiva implicitamente. Le selezioni sono salvate nel TOML negli array opzionali `direct_paths`, `recursive_paths`, `excluded_paths`; i percorsi sono letterali, assoluti o relativi alla sorgente, senza espansione di variabili. Le vecchie configurazioni funzionano senza questi campi. Le selezioni regolano il monitoraggio: disattivare una destinazione non disabilita le regole che vi scrivono.
+
+Con `recursive=false` e destinazioni `Images` e `Images\AI`, i file direttamente in entrambe vengono ricontrollati, ma `Images\AI\Game_Boy_Advance_era_style._female_Character_fanta` non viene esplorata. Anche `Downloads\spesasmart` resta esclusa se non selezionata esplicitamente.
+
 ## CLI e output
+
+Nella GUI puoi usare **Avvia scansione** per una scansione singola con il TOML salvato e validato. Salva prima le modifiche e risolvi eventuali conflitti. Se il motore è già attivo in background, arrestalo con **Arresta scansione** e attendi che risulti fermo prima di avviare la scansione singola. Il blocco per utente impedisce elaborazioni simultanee anche in caso di clic concorrenti.
+
+**Arresta scansione** richiede un arresto sicuro: gli spostamenti già completati restano registrati e non vengono annullati. La GUI attende l'uscita del motore, senza terminarlo forzatamente; il motore rimane fermo. Nessun terminale viene aperto e l'esito appare in basso. Con `dry_run=true` viene eseguita una simulazione. Al termine si aggiornano cronologia e stato applicato. I pulsanti non modificano l'avvio automatico di Windows.
 
 Dal terminale, nel percorso di installazione:
 
@@ -120,10 +146,10 @@ Requisiti di sviluppo: Windows x64 e .NET 10 SDK (versione in [global.json](glob
 
 ```powershell
 ./scripts/build.ps1
-./scripts/build-installer.ps1 -Version 1.1.0
+./scripts/build-installer.ps1 -Version 1.2.4
 
 # Fallback senza toolchain C++:
-./scripts/build-installer.ps1 -Version 1.1.0 -EngineMode Standard
+./scripts/build-installer.ps1 -Version 1.2.4 -EngineMode Standard
 
 # Compilatore Inno in un percorso diverso:
 ./scripts/build-installer.ps1 -CompilerPath "C:\tools\Inno Setup 6\ISCC.exe"
@@ -146,7 +172,7 @@ Output in `artifacts/publish/`. Per AOT basta `FileOrganizer.exe`; per motore st
 
 `scripts/build.ps1` compila l’intera soluzione ed esegue i test; `-EngineOnly` esclude WPF. Per includere il test fisico tra volumi, imposta `FILEORGANIZER_TEST_SECOND_VOLUME` su un percorso temporaneo scrivibile in un altro disco. Il test crea e rimuove solo una propria sottocartella univoca. In assenza di questa variabile quel test viene saltato; i test non usano le vere cartelle Download o Desktop.
 
-Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **119 test superati** (112 core/integrazione, 7 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Accesso reale a Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
+Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **147 test superati** (127 core/integrazione, 20 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Accesso reale a Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
 
 Il setup è stato verificato con installazione per utente senza amministratore, collegamenti, motore installato, simulazione, avvio/chiusura GUI, reinstallazione senza perdita del TOML, disinstallazione e rimozione selettiva dell’autorun. Puoi ripetere la prova con `./scripts/verify-installer.ps1`: usa una cartella sotto `artifacts/installer`, crea temporaneamente proprie voci HKCU e le pulisce alla fine. Richiede un account senza installazioni o collegamenti File Organizer preesistenti, per non interferire con l’uso reale. I log restano negli artefatti di verifica.
 

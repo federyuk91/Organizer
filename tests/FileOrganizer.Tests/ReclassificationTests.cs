@@ -49,7 +49,8 @@ public sealed class ReclassificationTests
         try
         {
             Save(f.ConfigPath, Config(f, Rule("Cats", Cats(f), "*gatt*") + Rule("Images", Images(f))));
-            await Fixture.Eventually(() => File.Exists(Path.Combine(Cats(f), "gatto.png")) && File.Exists(Path.Combine(Cats(f), "gattino.png")));
+            await Fixture.Eventually(() => File.Exists(Path.Combine(Cats(f), "gatto.png")));
+            Assert.True(File.Exists(Path.Combine(Images(f), "manual", "gattino.png")));
             Assert.True(File.Exists(Path.Combine(Images(f), "dog.png")));
             Assert.False(File.Exists(Path.Combine(Images(f), "gatto.png")));
             Assert.Equal(0, host.Failures);
@@ -107,12 +108,14 @@ public sealed class ReclassificationTests
         using CancellationTokenSource stop = new(); Task run = host.RunAsync(stop.Token);
         try
         {
-            Assert.Equal(3, host.WatcherCount); // Source, recursive Images, and their shared parent guard.
+            Assert.Equal(4, host.WatcherCount); // Source, Images, Cats and shared parent guard.
             Put(Images(f), "manual-gatto.png");
             await Fixture.Eventually(() => File.Exists(Path.Combine(Cats(f), "manual-gatto.png")));
             string staging = Path.Combine(f.Root, "staging"); Put(staging, "gattino.png");
             Directory.Move(staging, Path.Combine(Images(f), "imported"));
-            await Fixture.Eventually(() => File.Exists(Path.Combine(Cats(f), "gattino.png")));
+            await Task.Delay(500);
+            Assert.True(File.Exists(Path.Combine(Images(f), "imported", "gattino.png")));
+            Assert.False(File.Exists(Path.Combine(Cats(f), "gattino.png")));
             string ignored = Put(Path.Combine(f.Source, "unmanaged"), "gatto.png");
             Assert.True(File.Exists(ignored)); Assert.Equal(0, host.Failures);
         }

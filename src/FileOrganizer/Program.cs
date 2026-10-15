@@ -50,14 +50,16 @@ public static class Program
             if (reportState) states.Write(snapshot);
             try
             {
+                WorkerHost? activeHost = null;
                 await using WorkerHost host = new(config, configPath, log, history,
                     (text, next) =>
                     {
                         if (reportState && next.General.DryRun) states.Clear(snapshot);
-                        reportState = !next.General.DryRun; snapshot = states.Create(configPath, text, next);
+                        reportState = !next.General.DryRun; snapshot = states.Create(configPath, text, next, activeHost?.Managed);
                         if (reportState) states.Write(snapshot);
                     },
                     error => { snapshot = snapshot with { ReloadError = error }; if (reportState) states.Write(snapshot); });
+                activeHost = host;
                 if (command == "scan") return await host.ScanAsync(stop.Token);
                 try { await host.RunAsync(stop.Token); }
                 catch (OperationCanceledException) when (host.HistoryFailed) { return 3; }

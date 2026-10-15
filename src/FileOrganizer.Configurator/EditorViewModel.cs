@@ -96,7 +96,8 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
     public ICommand ApplyRawCommand { get; }
     public ICommand RefreshRawCommand { get; }
 
-    public EditorViewModel(Window owner, IStartupStore? startupStore = null, MoveHistory? history = null, EngineStateStore? states = null)
+    public EditorViewModel(Window owner, IStartupStore? startupStore = null, MoveHistory? history = null, EngineStateStore? states = null,
+        Func<string, string, CancellationToken, Task<ScanResult>>? scanRunner = null, Func<bool>? workerRunning = null, Func<bool>? stopWorker = null)
     {
         this.owner = owner;
         startup = startupStore ?? new RegistryStartupStore();
@@ -111,7 +112,7 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
         RemoveFolderCommand = new EditorCommand(() => { if (ConfirmRemove("folder and all its rules")) { int index = Folders!.IndexOf(selectedFolder!); Folders.Remove(selectedFolder!); SelectedFolder = Folders.ElementAtOrDefault(Math.Min(index, Folders.Count - 1)); } }, () => HasFolder);
         FolderUpCommand = new EditorCommand(() => MoveFolder(-1), () => HasFolder && Folders!.IndexOf(selectedFolder!) > 0);
         FolderDownCommand = new EditorCommand(() => MoveFolder(1), () => HasFolder && Folders!.IndexOf(selectedFolder!) < Folders.Count - 1);
-        AddRuleCommand = new EditorCommand(() => SelectedRule = document!.AddRule(selectedFolder!), () => HasFolder);
+        AddRuleCommand = new EditorCommand(AddRuleFromPreset, () => HasFolder);
         DuplicateRuleCommand = new EditorCommand(() => SelectedRule = document!.DuplicateRule(selectedFolder!, selectedRule!), () => HasRule);
         RemoveRuleCommand = new EditorCommand(() => { if (ConfirmRemove("rule")) { int index = Rules!.IndexOf(selectedRule!); Rules.Remove(selectedRule!); SelectedRule = Rules.ElementAtOrDefault(Math.Min(index, Rules.Count - 1)); } }, () => HasRule);
         RuleUpCommand = new EditorCommand(() => MoveRule(-1), () => HasRule && Rules!.IndexOf(selectedRule!) > 0);
@@ -124,6 +125,8 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
         RefreshRawCommand = new EditorCommand(() => { if (!rawPending || ConfirmRemove("unapplied TOML edits")) UpdateRaw(); }, () => !Busy && document is not null);
         enginePath = FindEngine();
         InitializeCompanions(history ?? new MoveHistory(MoveHistory.DefaultDirectory), states ?? new EngineStateStore(EngineStateStore.DefaultDirectory));
+        InitializeTree();
+        InitializeScan(scanRunner ?? EngineScan.RunAsync, workerRunning ?? InstanceLease.IsWorkerRunning, stopWorker ?? InstanceLease.RequestStop);
     }
     public async Task InitializeAsync(string? path)
     {
@@ -158,12 +161,13 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
     }
     private void Attach(ConfigurationDocument? value)
     {
+        MarkTreeStale();
         if (document is not null) document.Changed -= DocumentChanged;
         document = value;
         if (document is not null) document.Changed += DocumentChanged;
         SelectedFolder = document?.Folders.FirstOrDefault(); Refresh();
     }
-    private void DocumentChanged(object? sender, EventArgs e) { ResolvedPaths = "Settings changed. Validate or preview again to resolve paths."; Refresh(); Notify(nameof(SyncMessage)); }
+    private void DocumentChanged(object? sender, EventArgs e) { MarkTreeStale(); ResolvedPaths = "Settings changed. Validate or preview again to resolve paths."; Refresh(); Notify(nameof(SyncMessage)); }
     private void New()
     {
         if (!ConfirmDiscard()) return;
@@ -312,6 +316,7 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
         {
             await Task.Delay(300, token);
             bool changed = observed is not null && await Task.Run(observed.HasExternalChanges, token);
+            if (changed) MarkTreeStale();
             if (ReferenceEquals(observed, file))
             {
                 if (changed && !IsDirty && !Busy && observed is not null) { external = true; await LoadAsync(observed.Path); if (!external) Status = "Reloaded external changes from disk."; }
@@ -341,7 +346,7 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
     private void Notify([CallerMemberName] string? property = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
     private void Refresh()
     {
-        foreach (string property in new[] { nameof(Document), nameof(Folders), nameof(IsDirty), nameof(Title), nameof(Busy), nameof(CanEditForm), nameof(HasFolder), nameof(HasRule), nameof(ConfigPath), nameof(ExternalMessage), nameof(ExternalChanged), nameof(CanManageStartup), nameof(IsInteractive), nameof(SyncMessage) }) Notify(property);
+        foreach (string property in new[] { nameof(Document), nameof(Folders), nameof(IsDirty), nameof(Title), nameof(Busy), nameof(CanEditForm), nameof(HasFolder), nameof(HasRule), nameof(ConfigPath), nameof(ExternalMessage), nameof(ExternalChanged), nameof(CanManageStartup), nameof(IsInteractive), nameof(SyncMessage), nameof(CanEditTree) }) Notify(property);
         CommandManager.InvalidateRequerySuggested();
     }
     public void Dispose()

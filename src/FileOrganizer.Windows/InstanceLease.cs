@@ -38,6 +38,19 @@ public sealed class InstanceLease : IDisposable
         try { using EventWaitHandle stop = EventWaitHandle.OpenExisting(UserName + "-stop"); return stop.Set(); }
         catch (WaitHandleCannotBeOpenedException) { return false; }
     }
+    public static bool IsWorkerRunning()
+    {
+        try
+        {
+            using Mutex mutex = Mutex.OpenExisting(UserName);
+            bool acquired;
+            try { acquired = mutex.WaitOne(0); }
+            catch (AbandonedMutexException) { acquired = true; }
+            if (!acquired) return true;
+            mutex.ReleaseMutex(); return false;
+        }
+        catch (WaitHandleCannotBeOpenedException) { return false; }
+    }
     private void Hold(string name, string legacy, TimeSpan timeout)
     {
         bool acquired = false;
