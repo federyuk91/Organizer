@@ -68,6 +68,50 @@ public sealed class WindowTests
         }
     });
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public async Task SavingFromEveryTabPreservesSelectionsAndEnablesEditing(int tabIndex) => await OnSta(async () =>
+    {
+        using TestFixture f = new();
+        MainWindow window = new(f.Config, f.History, f.States) { Left = -20000, Top = -20000, ShowInTaskbar = false };
+        window.Show(); EditorViewModel vm = (EditorViewModel)window.DataContext;
+        try
+        {
+            await Eventually(() => vm.Document is not null && !vm.Busy);
+            string secondSource = Path.Combine(f.Root, "second"); Directory.CreateDirectory(secondSource);
+            vm.AddFolderCommand.Execute(null);
+            vm.SelectedFolder!.Fields["name"].Text = "Second folder";
+            vm.SelectedFolder.Fields["path"].Text = secondSource;
+            vm.SelectedRule!.Fields["patterns"].Text = "*.txt";
+            vm.SelectedRule.Fields["destination"].Text = "Text";
+            vm.AddRuleCommand.Execute(null);
+            vm.SelectedRule!.Fields["name"].Text = "Second rule";
+            vm.SelectedRule.Fields["extensions"].Text = ".png";
+            vm.SelectedRule.Fields["destination"].Text = "Images";
+            TabControl tabs = Descendants<TabControl>(window).Single(); tabs.SelectedIndex = tabIndex;
+            await Eventually(() => !vm.Busy);
+            vm.SaveCommand.Execute(null); await Eventually(() => !vm.Busy && !vm.IsDirty);
+            await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+            Assert.Equal("Second folder", vm.SelectedFolder?.DisplayName);
+            Assert.Equal("Second rule", vm.SelectedRule?.DisplayName);
+            Assert.True(vm.HasFolder); Assert.True(vm.HasRule); Assert.True(vm.CanEditForm);
+            Assert.True(tabs.IsEnabled); Assert.True(vm.SaveCommand.CanExecute(null));
+            tabs.SelectedIndex = 0;
+            await Eventually(() => Descendants<TextBox>(window).Any(t => t.IsEnabled &&
+                BindingOperations.GetBinding(t, TextBox.TextProperty)?.Path.Path == "SelectedFolder.Fields[name].Text"));
+            vm.SelectedRule!.Fields["name"].Text = "Edited after saving";
+            vm.SaveCommand.Execute(null); await Eventually(() => !vm.Busy && !vm.IsDirty);
+            Assert.Equal("Edited after saving", vm.SelectedRule?.DisplayName);
+            Assert.Equal("Edited after saving", ConfigurationLoader.Load(f.Config).Folders[1].Rules[1].Name);
+            AssertNoBindingErrors(window);
+        }
+        finally { await Eventually(() => !vm.Busy); window.Close(); }
+    });
+
     [Fact]
     public async Task RulePresetsPopulateNewRulesOnlyAndPersistEngineAcceptedExtensions() => await OnSta(async () =>
     {
@@ -338,7 +382,7 @@ public sealed class WindowTests
     });
 
     [Fact]
-    public async Task ConfiguredPathsFormOneExpandedChainAndInactiveConnectorsDoNotEnumerateOtherChildren() => await OnSta(async () =>
+    public async Task ConfiguredPathsFormOneExpandedChainWithDirectParentsAndExcludedChildren() => await OnSta(async () =>
     {
         using TestFixture f = new(); string source = Path.Combine(f.Root, "in");
         string images = Path.Combine(source, "Images"), ai = Path.Combine(images, "AI"), documents = Path.Combine(source, "Documents"), pdf = Path.Combine(documents, "PDF");
@@ -352,13 +396,43 @@ public sealed class WindowTests
         PathTreeNode root = Assert.Single(vm.PathRoots); Assert.Equal(source, root.Path); Assert.True(root.Expanded);
         PathTreeNode imageNode = root.Children.Single(n => n.Path == images); Assert.True(imageNode.Expanded);
         Assert.Equal(ai, Assert.Single(imageNode.Children).Path);
-        PathTreeNode documentNode = root.Children.Single(n => n.Path == documents); Assert.Equal("■", documentNode.Symbol); Assert.Contains("direct files are excluded", documentNode.Description);
-        Assert.Equal(pdf, Assert.Single(documentNode.Children).Path); // Only declared paths, no inspection of private descendants.
+        PathTreeNode documentNode = root.Children.Single(n => n.Path == documents); Assert.Equal("■", documentNode.Symbol); Assert.Contains("direct files", documentNode.Description);
+        Assert.Equal(pdf, documentNode.Children.Single(n => n.Path == pdf).Path);
+        PathTreeNode excludedChild = documentNode.Children.Single(n => n.Path == Path.Combine(documents, "private"));
+        Assert.Equal("□", excludedChild.Symbol); Assert.Empty(excludedChild.Children);
         List<PathTreeNode> visible = WalkPaths(vm.PathRoots).ToList();
         Assert.Equal(visible.Count, visible.Select(n => n.Path).Distinct(Paths.Comparer).Count());
         Assert.Equal("✓", imageNode.Children.Single().Symbol); // Existing direct destination without subfolders is complete.
-        await vm.CyclePathAsync(imageNode, false); Assert.Equal("✓", imageNode.Symbol);
+        Assert.Equal("✓", imageNode.Symbol);
         await vm.CyclePathAsync(imageNode, false); Assert.Equal("□", imageNode.Symbol); Assert.Empty(imageNode.Children);
+        await vm.CyclePathAsync(imageNode, true); Assert.Equal("✓", imageNode.Symbol);
+    });
+
+    [Fact]
+    public async Task DirectParentShowsCheckWhenEveryCurrentChildIsCompleteAndSquareOtherwise() => await OnSta(async () =>
+    {
+        using TestFixture f = new(); string documents = Path.Combine(f.Root, "in", "Documents");
+        string editables = Path.Combine(documents, "Editables"), pdf = Path.Combine(documents, "PDF");
+        Directory.CreateDirectory(editables); Directory.CreateDirectory(pdf);
+        ConfigurationDocument d = new(f.Valid); d.Folders[0].Rules[0].Fields["destination"].Text = editables;
+        d.Folders[0].Fields["recursive_paths"].Text = editables;
+        ConfigurationSection rule = d.AddRule(d.Folders[0]); rule.Fields["name"].Text = "PDF";
+        rule.Fields["destination"].Text = pdf; rule.Fields["extensions"].Text = ".pdf";
+        File.WriteAllText(f.Config, d.Render());
+        using EditorViewModel vm = new(new Window(), new FakeStore(), f.History, f.States);
+        await vm.InitializeAsync(f.Config); await vm.LoadPathsAsync();
+        PathTreeNode parent = WalkPaths(vm.PathRoots).Single(n => n.Path == documents);
+        Assert.Equal(DirectoryMode.Direct, parent.Layout.Mode(documents)); Assert.Equal("✓", parent.Symbol);
+        Assert.All(parent.Children, c => Assert.Equal("✓", c.Symbol));
+        PathTreeNode pdfNode = parent.Children.Single(n => n.Path == pdf);
+        await vm.CyclePathAsync(pdfNode, false); Assert.Equal("□", pdfNode.Symbol); Assert.Equal("■", parent.Symbol);
+        await vm.CyclePathAsync(pdfNode, true); Assert.Equal("✓", parent.Symbol);
+        string project = Path.Combine(documents, "Unselected", "deep"); Directory.CreateDirectory(project);
+        await vm.LoadPathsAsync(); parent = WalkPaths(vm.PathRoots).Single(n => n.Path == documents);
+        Assert.Equal("■", parent.Symbol);
+        PathTreeNode excluded = parent.Children.Single(n => n.Path == Path.GetDirectoryName(project));
+        Assert.Equal("□", excluded.Symbol); Assert.Empty(excluded.Children);
+        Configuration saved = vm.Document!.Validate(); Assert.Equal(DirectoryMode.Off, new DirectoryScope(saved.Folders[0]).Mode(project));
     });
 
     [Fact]
@@ -533,6 +607,19 @@ public sealed class WindowTests
         Assert.True(vm.RuntimeMessage.Contains("UNVERIFIED") || vm.RuntimeMessage.Contains("not verified"));
         vm.PathView = "Applied engine"; await vm.LoadPathsAsync(); Assert.Empty(vm.PathRoots);
         Assert.Contains("unavailable", vm.TreeStatus, StringComparison.OrdinalIgnoreCase);
+    });
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task OlderWorkerSnapshotsCannotClaimTheNewDirectoryPolicy(int version) => await OnSta(async () =>
+    {
+        using TestFixture f = new(); Configuration config = ConfigurationLoader.Load(f.Config);
+        f.States.Write(f.States.Create(f.Config, f.Valid, config) with { Version = version });
+        using EditorViewModel vm = new(new Window(), new FakeStore(), f.History, f.States);
+        await vm.InitializeAsync(f.Config); Assert.Contains("ENGINE PID", vm.RuntimeMessage);
+        vm.PathView = "Applied engine"; await vm.LoadPathsAsync();
+        Assert.Empty(vm.PathRoots); Assert.False(vm.CanEditTree);
+        Assert.Contains("1.2.6", vm.TreeStatus);
     });
     [Fact]
     public async Task PathTreeMouseButtonsAndGrayExcludedRowsWorkInTheRealWindow() => await OnSta(async () =>

@@ -3,15 +3,32 @@ using System.Collections.Immutable;
 namespace FileOrganizer.Core;
 
 // The same directory policy drives enumeration, event admission and the configuration tree.
-public sealed class DirectoryScope(Folder folder, IEnumerable<string>? destinations = null)
+public sealed class DirectoryScope
 {
-    public Folder Folder { get; } = folder;
-    public ImmutableArray<string> BaseRoots { get; } = (destinations ?? folder.Rules.Where(r => r.Enabled).Select(r => r.Destination))
-        .Prepend(folder.Path).Distinct(Paths.Comparer).ToImmutableArray();
-    public ImmutableArray<PathOverride> Overrides { get; } = folder.PathOverrides.IsDefault ? [] : folder.PathOverrides;
-    public ImmutableArray<string> ExplicitRoots { get; } = (destinations ?? folder.Rules.Where(r => r.Enabled).Select(r => r.Destination))
-        .Prepend(folder.Path).Concat((folder.PathOverrides.IsDefault ? [] : folder.PathOverrides).Where(p => p.Mode != DirectoryMode.Off).Select(p => p.Path)).Distinct(Paths.Comparer).ToImmutableArray();
-    public DirectoryMode Mode(string directory)
+    public Folder Folder { get; }
+    public ImmutableArray<string> BaseRoots { get; }
+    public ImmutableArray<PathOverride> Overrides { get; }
+    public ImmutableArray<string> ExplicitRoots { get; }
+    private readonly HashSet<string> connectingPaths = new(Paths.Comparer);
+    public DirectoryScope(Folder folder, IEnumerable<string>? destinations = null)
+    {
+        Folder = folder; Overrides = folder.PathOverrides.IsDefault ? [] : folder.PathOverrides;
+        BaseRoots = (destinations ?? folder.Rules.Where(r => r.Enabled).Select(r => r.Destination))
+            .Prepend(folder.Path).Distinct(Paths.Comparer).ToImmutableArray();
+        ImmutableArray<string> declared = BaseRoots.Concat(Overrides.Where(p => p.Mode != DirectoryMode.Off).Select(p => p.Path))
+            .Distinct(Paths.Comparer).ToImmutableArray();
+        foreach (string target in declared.Where(p => ConfiguredMode(p) != DirectoryMode.Off))
+        {
+            string? anchor = declared.Where(p => !Paths.Comparer.Equals(p, target) && Paths.Within(target, p) && ConfiguredMode(p) != DirectoryMode.Off)
+                .MinBy(p => p.Length);
+            if (anchor is null) continue;
+            for (string? parent = Path.GetDirectoryName(target); parent is not null && !Paths.Comparer.Equals(parent, anchor); parent = Path.GetDirectoryName(parent))
+                if (ConfiguredMode(parent) == DirectoryMode.Off && !Overrides.Any(p => p.Mode == DirectoryMode.Off && Paths.Within(parent, p.Path))) connectingPaths.Add(parent);
+        }
+        ExplicitRoots = declared.Concat(connectingPaths).Distinct(Paths.Comparer).ToImmutableArray();
+    }
+    public DirectoryMode Mode(string directory) => connectingPaths.Contains(directory) ? DirectoryMode.Direct : ConfiguredMode(directory);
+    private DirectoryMode ConfiguredMode(string directory)
     {
         if (!Folder.Enabled || Overrides.Any(p => p.Mode == DirectoryMode.Off && Paths.Within(directory, p.Path))) return DirectoryMode.Off;
         PathOverride? selection = Overrides.Where(p => Paths.Within(directory, p.Path)).MaxBy(p => p.Path.Length);

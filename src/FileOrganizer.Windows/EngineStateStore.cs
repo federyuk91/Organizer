@@ -25,7 +25,7 @@ public sealed class EngineStateStore(string directory)
             config.Folders.Select(f => new RuntimeFolder(f.Name, f.Path, f.Enabled, f.Recursive,
                 (managed?.Folders.FirstOrDefault(m => ReferenceEquals(m.Folder, f))?.Destinations ??
                     f.Rules.Where(r => r.Enabled).Select(r => r.Destination).ToImmutableArray()).ToArray(),
-                (f.PathOverrides.IsDefault ? [] : f.PathOverrides).ToArray())).ToArray(), Version: 2);
+                (f.PathOverrides.IsDefault ? [] : f.PathOverrides).ToArray())).ToArray(), Version: 3);
     }
     public void Write(EngineSnapshot snapshot)
     {
@@ -56,7 +56,7 @@ public sealed class EngineStateStore(string directory)
         using FileStream stream = new(FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         EngineSnapshot? snapshot = JsonSerializer.Deserialize(stream, OperationJson.Default.EngineSnapshot);
         if (snapshot is null) return null;
-        if (snapshot.Version is not (1 or 2) || snapshot.Pid <= 0 || snapshot.StartedUtcTicks <= 0 || snapshot.Folders is null ||
+        if (snapshot.Version is not (1 or 2 or 3) || snapshot.Pid <= 0 || snapshot.StartedUtcTicks <= 0 || snapshot.Folders is null ||
             string.IsNullOrWhiteSpace(snapshot.Executable) || string.IsNullOrWhiteSpace(snapshot.ConfigPath) || snapshot.ConfigHash is null || snapshot.ConfigHash.Length != 64 ||
             snapshot.Folders.Any(f => f is null || string.IsNullOrWhiteSpace(f.Path) || string.IsNullOrWhiteSpace(f.Name))) throw new IOException("Invalid engine status");
         if (!verifyProcess) return snapshot;

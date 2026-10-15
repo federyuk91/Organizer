@@ -69,6 +69,7 @@ public sealed class PathTreeNode : INotifyPropertyChanged
     private bool expanded, loaded;
     private readonly bool root;
     private bool? hasSubdirectories;
+    private readonly HashSet<PathTreeNode> observedChildren = [];
     public int FolderIndex => Layout.Owner(Path);
     public string Path { get; }
     public string Label => Placeholder ? "Cannot inspect this directory" : Layout.Label(Path, root);
@@ -77,11 +78,14 @@ public sealed class PathTreeNode : INotifyPropertyChanged
     public ObservableCollection<PathTreeNode> Children { get; } = [];
     public bool IsLeaf => hasSubdirectories == false && !Layout.KnownChildren(Path).Any();
     public bool IsOff => Unsafe || Placeholder || Layout.Mode(Path) == DirectoryMode.Off && !Layout.HasActiveDescendant(Path);
-    public DirectoryMode State => IsOff ? DirectoryMode.Off : Layout.Complete(Path) || IsLeaf ? DirectoryMode.Recursive : DirectoryMode.Direct;
+    public DirectoryMode State => IsOff ? DirectoryMode.Off : Layout.Complete(Path) || IsLeaf ||
+        Layout.Mode(Path) != DirectoryMode.Off && AllLoadedChildrenComplete ? DirectoryMode.Recursive : DirectoryMode.Direct;
+    private bool AllLoadedChildrenComplete => loaded && Children.Count > 0 && Children.All(c => !c.Placeholder && c.State == DirectoryMode.Recursive);
     public string Symbol => State switch { DirectoryMode.Off => "□", DirectoryMode.Direct => "■", _ => "✓" };
     public string Description => Path + "\n" + (!Scope.Folder.Enabled ? "Monitor disabled. Enable it in Folders and rules before changing its paths." : Unsafe ? "Unavailable or reparse point: never explored." :
         Layout.Mode(Path) == DirectoryMode.Off && !IsOff ? "Only the configured descendant paths shown here are monitored; direct files are excluded." :
         IsLeaf && !IsOff ? "No subfolders: all current direct files are included. Future folders follow the saved directory mode." :
+        State == DirectoryMode.Recursive && Layout.Mode(Path) == DirectoryMode.Direct ? "Direct files and all current subfolders are included. Future folders follow the saved selections; choose recursive explicitly to include future descendants." :
         State switch { DirectoryMode.Off => "Excluded: descendants are hidden.", DirectoryMode.Direct => "Active: direct files; only explicitly active child paths are included.", _ => "Active: all descendants recursively, including future subfolders." });
     public bool Blocked => Scope.Overrides.Any(p => p.Mode == DirectoryMode.Off && !Paths.Comparer.Equals(p.Path, Path) && Paths.Within(Path, p.Path));
     public bool CanCycle => Scope.Folder.Enabled && !Unsafe && !Placeholder && !Blocked;
@@ -90,9 +94,27 @@ public sealed class PathTreeNode : INotifyPropertyChanged
     internal PathTreeNode(PathTreeLayout layout, string path, bool root, bool unsafePath = false, bool placeholder = false)
     {
         Layout = layout; Path = path; this.root = root; Unsafe = unsafePath; Placeholder = placeholder;
+        Children.CollectionChanged += (_, args) =>
+        {
+            if (args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+            {
+                foreach (PathTreeNode child in observedChildren) child.PropertyChanged -= ChildChanged;
+                observedChildren.Clear();
+            }
+            if (args.OldItems is not null) foreach (PathTreeNode child in args.OldItems)
+                if (observedChildren.Remove(child)) child.PropertyChanged -= ChildChanged;
+            if (args.NewItems is not null) foreach (PathTreeNode child in args.NewItems)
+                if (observedChildren.Add(child)) child.PropertyChanged += ChildChanged;
+            Notify(nameof(State)); Notify(nameof(Symbol)); Notify(nameof(Description));
+        };
         if (!IsOff && !Unsafe && !Placeholder) AddPlaceholder();
     }
     private void AddPlaceholder() => Children.Add(new(Layout, Path, false, placeholder: true));
+    private void ChildChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName != nameof(State)) return;
+        Notify(nameof(State)); Notify(nameof(Symbol)); Notify(nameof(Description));
+    }
     private void Notify(string name) => PropertyChanged?.Invoke(this, new(name));
     public void Update()
     {
@@ -190,7 +212,7 @@ public sealed partial class EditorViewModel
             if (PathView == "Applied engine")
             {
                 EngineSnapshot? applied = await Task.Run(() => states.Read());
-                if (applied is null || applied.Version < 2) throw new IOException("Applied path scope unavailable. Start the updated engine to verify it.");
+                if (applied is null || applied.Version < 3) throw new IOException("Applied path scope unavailable. Start engine 1.2.6 or later to verify the current directory policy.");
                 treeApplied = applied;
                 config = new(new General(), applied.Folders.Select(f => new Folder(f.Name, f.Path, f.Enabled, f.Recursive, new DuplicatePolicy(),
                     (f.Destinations ?? []).Select(p => new Rule("Destination", true, p, [".unused"], [], [], false)).ToImmutableArray(),

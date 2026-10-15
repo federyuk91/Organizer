@@ -58,7 +58,7 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
     public ConfigurationSection? SelectedFolder
     {
         get => selectedFolder;
-        set { selectedFolder = value; SelectedRule = value?.Rules.FirstOrDefault(); Notify(); Notify(nameof(Rules)); Refresh(); Notify(nameof(SyncMessage)); }
+        set { selectedFolder = value; Notify(); Notify(nameof(Rules)); SelectedRule = value?.Rules.FirstOrDefault(); Refresh(); Notify(nameof(SyncMessage)); }
     }
     public ObservableCollection<ConfigurationSection>? Rules => selectedFolder?.Rules;
     public ConfigurationSection? SelectedRule { get => selectedRule; set { selectedRule = value; Notify(); Refresh(); } }
@@ -162,13 +162,19 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
         catch (Exception exception) when (Expected(exception)) { Status = exception.Message; }
         finally { Busy = false; }
     }
-    private void Attach(ConfigurationDocument? value)
+    private void Attach(ConfigurationDocument? value, bool preserveSelection = false)
     {
+        int folderIndex = preserveSelection && selectedFolder is not null ? document?.Folders.IndexOf(selectedFolder) ?? 0 : 0;
+        int ruleIndex = preserveSelection && selectedRule is not null ? selectedFolder?.Rules.IndexOf(selectedRule) ?? 0 : 0;
         MarkTreeStale();
         if (document is not null) document.Changed -= DocumentChanged;
         document = value;
         if (document is not null) document.Changed += DocumentChanged;
-        SelectedFolder = document?.Folders.FirstOrDefault(); Refresh();
+        // Replace item sources before selecting objects from the new document: WPF otherwise clears them.
+        Notify(nameof(Document)); Notify(nameof(Folders));
+        SelectedFolder = document?.Folders.ElementAtOrDefault(Math.Max(0, folderIndex)) ?? document?.Folders.FirstOrDefault();
+        SelectedRule = selectedFolder?.Rules.ElementAtOrDefault(Math.Max(0, ruleIndex)) ?? selectedFolder?.Rules.FirstOrDefault();
+        Refresh();
     }
     private void DocumentChanged(object? sender, EventArgs e) { MarkTreeStale(); ResolvedPaths = "Settings changed. Validate or preview again to resolve paths."; Refresh(); Notify(nameof(SyncMessage)); }
     private void New()
@@ -222,7 +228,7 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
             else target = file;
             await Task.Run(() => target.Save(text));
             ConfigurationDocument saved = await Task.Run(target.Open);
-            file = target; Attach(saved); textReplaced = rawPending = external = false;
+            file = target; Attach(saved, preserveSelection: true); textReplaced = rawPending = external = false;
             SetRaw(target.Text); Watch(); RefreshStartup(); await RefreshDiskAndRuntimeAsync();
             Status = "Saved atomically. " + (config.General.WatchConfigChanges ? "A running engine may immediately reload and reconcile files." : "Restart the engine to apply changes; config watching is disabled.");
             return true;

@@ -45,9 +45,60 @@ public sealed class DirectoryScopeTests
         string child = Path.Combine(ai, "chosen"); string chosen = Put(child); string deeper = Put(Path.Combine(child, "excluded"));
         Configuration config = ConfigurationLoader.Parse(Text(f, $"direct_paths=['{f.Destination}','{child}']"));
         ManagedDirectories scope = new(config);
-        Assert.Equal(DirectoryMode.Off, scope.Folders[0].Selection.Mode(ai));
-        Assert.Equal(new[] { direct, chosen }.Order(), scope.Snapshot(config.Folders[0]).Order());
-        Assert.Null(scope.Owner(aiFile)); Assert.Null(scope.Owner(deeper));
+        Assert.Equal(DirectoryMode.Direct, scope.Folders[0].Selection.Mode(ai));
+        Assert.Equal(new[] { direct, aiFile, chosen }.Order(), scope.Snapshot(config.Folders[0]).Order());
+        Assert.Same(config.Folders[0], scope.Owner(aiFile)); Assert.Null(scope.Owner(deeper));
+    }
+    [WindowsFact]
+    public async Task ConnectingParentsIncludeDirectDocumentsWithoutExploringUnselectedProjects()
+    {
+        using Fixture f = new(); string documents = Path.Combine(f.Source, "Documents"), editables = Path.Combine(documents, "Editables");
+        string input = Put(documents, "Allegato-3_eventi.doc");
+        string nested = Put(Path.Combine(documents, "Project", "deep"), "private.doc");
+        string unrelated = Put(Path.Combine(f.Source, "spesasmart"), "private.doc");
+        string text = f.Text().Replace(f.Destination, editables).Replace("*.txt", "*.doc");
+        Configuration config = ConfigurationLoader.Parse(text); ManagedDirectories scope = new(config);
+        Assert.Equal(DirectoryMode.Direct, scope.Folders[0].Selection.Mode(documents));
+        Assert.Contains(documents, scope.WatchRoots); Assert.Equal(new[] { input }, scope.Snapshot(config.Folders[0]));
+        Assert.Null(scope.Owner(nested)); Assert.Null(scope.Owner(unrelated));
+        await using WorkerHost host = new(config, f.ConfigPath, f.Log()); Assert.Equal(0, await host.ScanAsync());
+        Assert.True(File.Exists(Path.Combine(editables, Path.GetFileName(input)))); Assert.False(File.Exists(input));
+        Assert.True(File.Exists(nested)); Assert.True(File.Exists(unrelated));
+    }
+    [WindowsFact]
+    public void ConnectingPathsRespectExclusionsAndNeverReachAboveAnExternalDestination()
+    {
+        using Fixture f = new(); string documents = Path.Combine(f.Source, "Documents"), editables = Path.Combine(documents, "Editables");
+        string excluded = Put(documents, "excluded.doc");
+        string text = f.Text().Replace(f.Destination, editables).Replace("[folders.duplicates]", "excluded_paths=['Documents']\n[folders.duplicates]");
+        Configuration config = ConfigurationLoader.Parse(text); ManagedDirectories scope = new(config);
+        Assert.Null(scope.Owner(excluded)); Assert.Empty(scope.Snapshot(config.Folders[0]));
+        Configuration external = f.Config(); DirectoryScope externalScope = new(external.Folders[0]);
+        Assert.Equal(DirectoryMode.Off, externalScope.Mode(f.Root)); Assert.DoesNotContain(f.Root, externalScope.ActiveRoots);
+    }
+    [WindowsFact]
+    public void ConnectingParentCannotAcquireAnotherMonitorsSource()
+    {
+        using Fixture f = new(); string documents = Path.Combine(f.Source, "Documents"); Directory.CreateDirectory(documents);
+        string text = f.Text().Replace(f.Destination, Path.Combine(documents, "Editables")) +
+            $"\n[[folders]]\nname='other'\npath='{documents}'\n[[folders.rules]]\nname='other'\npatterns=['*.bin']\ndestination='{f.Root}\\other-output'\n";
+        Assert.Throws<ConfigException>(() => ConfigurationLoader.Parse(text));
+    }
+    [WindowsFact]
+    public async Task WatcherProcessesDirectFilesInConnectingParents()
+    {
+        using Fixture f = new(); string documents = Path.Combine(f.Source, "Documents"), editables = Path.Combine(documents, "Editables");
+        Directory.CreateDirectory(editables);
+        string text = f.Text(general: "scan_on_startup=false").Replace(f.Destination, editables).Replace("*.txt", "*.doc");
+        File.WriteAllText(f.ConfigPath, text); Configuration config = ConfigurationLoader.Parse(text);
+        await using WorkerHost host = new(config, f.ConfigPath, f.Log()); using CancellationTokenSource stop = new(); Task run = host.RunAsync(stop.Token);
+        try
+        {
+            Put(documents, "watched.doc"); string nested = Put(Path.Combine(documents, "project"), "protected.doc");
+            await Fixture.Eventually(() => File.Exists(Path.Combine(editables, "watched.doc")));
+            Assert.True(File.Exists(nested)); Assert.Equal(0, host.Failures);
+        }
+        finally { stop.Cancel(); await run; }
     }
     [WindowsTheory]
     [InlineData("direct_paths=['x']\nrecursive_paths=['x']")]

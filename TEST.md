@@ -63,7 +63,7 @@ The solution uses xUnit; WPF tests run on an STA dispatcher with real bindings a
 3. Validate `Config.Example.toml` with CLI using test-only safe source paths or a temporary transformed copy.
 4. Run integration tests covering real filesystem watcher behavior where supported.
 5. `dotnet publish` on Windows (AOT if compatible), verify output launches and `--help`/`validate` work.
-6. Build the setup with `./scripts/build-installer.ps1 -Version 1.2.5`, then run `./scripts/verify-installer.ps1 -Isolated` when File Organizer is already installed. Check GUI startup, shortcuts/icons, dry run, upgrade retention, uninstall and scoped HKCU cleanup.
+6. Build the setup with `./scripts/build-installer.ps1 -Version 1.2.6`, then run `./scripts/verify-installer.ps1 -Isolated` when File Organizer is already installed. Check GUI startup, shortcuts/icons, dry run, upgrade retention, uninstall and scoped HKCU cleanup.
 7. Report untested Windows-specific cases honestly when environment is not Windows.
 
 **Release gate:** no failing safety/integrity tests; no unexplained skipped required tests. If a feature cannot be validated, document precise limits and do not claim that it passed.
@@ -79,15 +79,21 @@ The solution uses xUnit; WPF tests run on an STA dispatcher with real bindings a
 | T-39 | R-11, R-28 | Direct source and each explicit destination preserve nested projects; recursive selection includes future descendants; direct/off overrides and individual active child paths agree in enumeration, transfer admission and watcher reloads. Reject duplicate/outside/contradictory selections; preserve literal percent paths, comments and selections across edits/reordering. |
 | T-40 | R-28 | Both click cycles, lazy one-level activation, hidden inactive descendants, full/off replacement of child selections, persistence through Save, separate draft/disk/applied views and editing blocked on conflicts. |
 | T-41 | R-29 | GUI scan/stop commands use the saved engine/config paths, confirm saving dirty drafts, abort on cancelled/failed saves, refuse conflicting drafts and active workers, block concurrent launches, and report success/dry-run/errors/cancellation. Launch the actual CLI with spaced paths, preserve dry-run files, cancel safely during readiness waits and wait for exit; cover pre-start cancellation and invalid configs. |
-| T-42 | R-28 | Empty directories toggle only off/complete in both directions; newly added children restore three-state selection. Deduplicate roots/descendants globally, expand configured chains, retain monitor ownership, and show intermediate connectors without enumerating their excluded contents. |
+| T-42 | R-28 | Empty directories toggle only off/complete in both directions; newly added children restore three-state selection. Deduplicate roots/descendants globally, expand configured chains, retain monitor ownership, and include direct files in connecting parents without enumerating excluded child contents; all complete children aggregate to a parent check, with updates when a child is disabled. |
 | T-43 | R-30 | Preset selection alone does not add rules; default creates an unchanged empty rule. All fourteen presets create editable name/extension fields without destination or patterns; existing rules/priority remain intact. Verify every extension, case-insensitive matching, TOML round-trip and real WPF dropdown/button invocation. Specialized presets overlapping generic categories obey rule ordering and reordering. |
 
 ## Current verification baseline
 
-Version `1.2.5`, verified on 15 October 2026 with Windows x64 and .NET SDK 10.0.401: 152 passed, 0 failed, 0 skipped (127 core/Windows/CLI and 25 WPF), including physical C: to D: transfers. Release build had no warnings or errors. The Native AOT engine, self-contained WPF publish and isolated installer lifecycle passed. Tests never scan the user's actual Downloads/Desktop or change the user's normal autorun entry.
+Version `1.2.6`, verified on 15 October 2026 with Windows x64 and .NET SDK 10.0.401: 164 passed, 0 failed, 0 skipped (131 core/Windows/CLI and 33 WPF), including physical C: to D: transfers. Release build had no warnings or errors. The Native AOT engine, self-contained WPF publish and isolated installer lifecycle passed. Tests never scan the user's actual Downloads/Desktop or change the user's normal autorun entry.
 
 T-01–T-43 are acceptance scenarios, not a one-to-one list of test methods. Document persistence tests additionally cover comments/unknown data, exact no-edit round trips, atomic save/backup, invalid candidates and external conflicts; startup tests cover read-back and access failures through isolated/fake stores.
 
 Manual checks remain for actual login startup, Windows versions other than the test host, and native folder/file dialogs. Resource measurements in README refer to version 1.0.0; they are not measurements of 1.2.4.
 
 Scan button regression checks cover real WPF enabled states during background-worker transitions, confirmed raw TOML saves before launch, rejected/failed saves, reentrant launch prevention, worker starts during save, and inaccessible worker locks. Process exit and configuration notifications refresh commands without idle polling.
+
+Save regression: from each of the five WPF tabs, save a non-first folder/rule selection, verify selection and editor enabled states, edit again and save a second time. Rebinding must publish new item sources before restoring selection.
+
+Connecting-path regression: a direct Documents/Allegato-3_eventi.doc is moved to Documents/Editables by scan and watcher processing, while unselected projects stay intact. Exclusions, independent external roots and cross-monitor ownership remain protected. Tests use temporary directories only.
+
+Applied-tree compatibility: accept prior diagnostic snapshots for basic status, but refuse reconstructing the new connecting-directory policy from snapshot versions 1/2. Version 3 is required for the applied path tree.

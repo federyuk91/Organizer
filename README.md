@@ -82,17 +82,19 @@ Salvare nuove regole può quindi spostare subito file già organizzati, se il mo
 
 ## Albero dei percorsi
 
-Apri **Managed paths** e scegli **Draft**, **Saved file** o **Applied engine**, poi **Load / refresh paths**. Le ultime due viste sono in sola lettura; quella applicata include anche le vecchie destinazioni ancora gestite nella sessione. Con motore fermo o precedente alla 1.2.0, il suo ambito è dichiarato non verificabile.
+Apri **Managed paths** e scegli **Draft**, **Saved file** o **Applied engine**, poi **Load / refresh paths**. Le ultime due viste sono in sola lettura; quella applicata include anche le vecchie destinazioni ancora gestite nella sessione. Con motore fermo o precedente alla 1.2.6, il suo ambito è dichiarato non verificabile.
 
 | Simbolo | Ambito |
 |---|---|
 | □ grigio | Disattivo: nessuna esplorazione dei discendenti, che restano nascosti. |
-| ■ | File diretti e singoli rami eventualmente selezionati; non tutto il sottoalbero. |
-| ✓ | Tutto il sottoalbero ricorsivamente, comprese nuove sottocartelle. |
+| ■ | File diretti inclusi e solo i sottorami selezionati; almeno una sottocartella è esclusa o parziale. |
+| ✓ | File diretti e tutte le sottocartelle attuali inclusi. Una selezione ricorsiva esplicita include anche i futuri discendenti. |
+
+Il simbolo del padre si aggiorna quando cambiano i figli: tutti completi → ✓, almeno uno escluso/parziale → ■. La completezza calcolata dai figli non estende automaticamente il monitoraggio a cartelle future: queste seguono il modo e le selezioni salvati, indicati nel tooltip.
 
 Se una cartella non contiene sottocartelle, entrambi i clic alternano soltanto **□ ↔ ✓**. Una cartella già inclusa direttamente appare completa finché non ha sottocartelle; eventuali nuove cartelle seguono il modo salvato nel TOML. Negli altri casi, clic sinistro (o Spazio): **□ → ■ → ✓ → □**. Clic destro: **□ → ✓ → ■ → □**. Attivando un ramo escluso in modalità ■ vengono mostrate solo le sue sottocartelle immediate, senza attivarle. ✓ e □ sostituiscono le selezioni sottostanti; un'eccezione in un ramo ricorsivo fa apparire il simbolo ■. Espandi gli altri rami su richiesta: nessuna scansione profonda automatica della GUI o polling.
 
-L'albero elenca sorgenti, destinazioni esplicite e percorsi selezionati, anche se annidati: ogni percorso compare una sola volta, sotto la radice configurata più breve. La catena fino alle destinazioni annidate si apre automaticamente, anche con più monitor. I livelli intermedi che collegano destinazioni esplicite non abilitano il monitoraggio dei propri file: il tooltip lo indica; vengono collegati solo i percorsi noti dal TOML. I clic modificano la **bozza**; premi **Save** per validarla e applicarla. Un monitor globalmente disabilitato va prima abilitato in **Folders and rules**: l'albero non lo riattiva implicitamente. Le selezioni sono salvate nel TOML negli array opzionali `direct_paths`, `recursive_paths`, `excluded_paths`; i percorsi sono letterali, assoluti o relativi alla sorgente, senza espansione di variabili. Le vecchie configurazioni funzionano senza questi campi. Le selezioni regolano il monitoraggio: disattivare una destinazione non disabilita le regole che vi scrivono.
+L'albero elenca sorgenti, destinazioni esplicite e percorsi selezionati, anche se annidati: ogni percorso compare una sola volta, sotto la radice configurata più breve. La catena fino alle destinazioni annidate si apre automaticamente, anche con più monitor. Dalla versione 1.2.6, i percorsi intermedi tra una radice gestita e un suo percorso attivo includono i propri file diretti: per esempio, con destinazioni Documents\PDF e Documents\Editables, vengono ricontrollati anche i file direttamente in Documents. Le altre sottocartelle restano escluse. Non vengono aggiunti percorsi sopra una destinazione esterna indipendente. I clic modificano la **bozza**; premi **Save** per validarla e applicarla. Un monitor globalmente disabilitato va prima abilitato in **Folders and rules**: l'albero non lo riattiva implicitamente. Le selezioni sono salvate nel TOML negli array opzionali `direct_paths`, `recursive_paths`, `excluded_paths`; i percorsi sono letterali, assoluti o relativi alla sorgente, senza espansione di variabili. Le vecchie configurazioni funzionano senza questi campi. Le selezioni regolano il monitoraggio: disattivare una destinazione non disabilita le regole che vi scrivono.
 
 Con `recursive=false` e destinazioni `Images` e `Images\AI`, i file direttamente in entrambe vengono ricontrollati, ma `Images\AI\Game_Boy_Advance_era_style._female_Character_fanta` non viene esplorata. Anche `Downloads\spesasmart` resta esclusa se non selezionata esplicitamente.
 
@@ -130,7 +132,7 @@ Per organizzare solo i file direttamente in Downloads, lascia **Recursive** disa
 
 Puoi aggiungere, eliminare, duplicare, abilitare/disabilitare e riordinare cartelle e regole; modificare filtri, esclusioni, destinazioni, duplicati e impostazioni generali. Sorgenti e destinazioni possono contenere variabili d’ambiente; gli override dei percorsi nell’albero sono invece letterali.
 
-**Save** valida l’intero documento con il parser del motore, conserva commenti e impostazioni e scrive atomicamente, mantenendo una copia `.bak`. Le modifiche esterne impediscono di sovrascrivere una versione più recente: usa **Reload** o **Save As**. La scheda TOML consente modifiche dirette; applicale con **Apply TOML** prima di riprendere l’editing dei campi. Proprietà sconosciute vengono conservate, ma bloccano il salvataggio se il motore non le accetta.
+**Save** mantiene la cartella e la regola selezionate dopo il salvataggio, lasciando gli editor utilizzabili. Valida l’intero documento con il parser del motore, conserva commenti e impostazioni e scrive atomicamente, mantenendo una copia `.bak`. Le modifiche esterne impediscono di sovrascrivere una versione più recente: usa **Reload** o **Save As**. La scheda TOML consente modifiche dirette; applicale con **Apply TOML** prima di riprendere l’editing dei campi. Proprietà sconosciute vengono conservate, ma bloccano il salvataggio se il motore non le accetta.
 
 Scorciatoie: `Ctrl+S` salva, `Ctrl+O` apre, `Ctrl+N` crea. Salvare con un nuovo nome non trasferisce una registrazione di avvio del vecchio TOML. Il toggle autorun non indica se il processo è attualmente in esecuzione.
 
@@ -164,10 +166,10 @@ Requisiti di sviluppo: Windows x64 e .NET 10 SDK (versione in [global.json](glob
 
 ```powershell
 ./scripts/build.ps1
-./scripts/build-installer.ps1 -Version 1.2.5
+./scripts/build-installer.ps1 -Version 1.2.6
 
 # Fallback senza toolchain C++:
-./scripts/build-installer.ps1 -Version 1.2.5 -EngineMode Standard
+./scripts/build-installer.ps1 -Version 1.2.6 -EngineMode Standard
 
 # Compilatore Inno in un percorso diverso:
 ./scripts/build-installer.ps1 -CompilerPath "C:\tools\Inno Setup 6\ISCC.exe"
@@ -190,7 +192,7 @@ Output in `artifacts/publish/`. Per AOT basta `FileOrganizer.exe`; per motore st
 
 `scripts/build.ps1` compila l’intera soluzione ed esegue i test; `-EngineOnly` esclude WPF. Per includere il test fisico tra volumi, imposta `FILEORGANIZER_TEST_SECOND_VOLUME` su un percorso temporaneo scrivibile in un altro disco. Il test crea e rimuove solo una propria sottocartella univoca. In assenza di questa variabile quel test viene saltato; i test non usano le vere cartelle Download o Desktop.
 
-Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **152 test superati** (127 core/integrazione, 25 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Avvio effettivo al login Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
+Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **164 test superati** (131 core/integrazione, 33 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Avvio effettivo al login Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
 
 Il setup è stato verificato con installazione per utente senza amministratore, collegamenti, motore installato, simulazione, avvio/chiusura GUI, reinstallazione senza perdita del TOML, disinstallazione e rimozione selettiva dell’autorun. Puoi ripetere la prova con `./scripts/verify-installer.ps1`: usa una cartella sotto `artifacts/installer`, crea temporaneamente proprie voci HKCU e le pulisce alla fine. Richiede un account senza installazioni o collegamenti File Organizer preesistenti, per non interferire con l’uso reale. I log restano negli artefatti di verifica.
 

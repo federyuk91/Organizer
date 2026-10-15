@@ -41,6 +41,15 @@ public sealed class ManagedDirectories
     {
         ManagedFolder[] folders = scopes.ToArray();
         foreach (ManagedFolder owner in folders)
+        foreach (string root in owner.Selection.ActiveRoots)
+        {
+            Paths.NoReparse(root);
+            if (File.Exists(root)) throw new ConfigException("Managed path is a file: " + root);
+            if (!owner.Destinations.Any(d => Paths.Within(root, d)) &&
+                folders.Any(other => !ReferenceEquals(owner, other) && other.Selection.Mode(root) != DirectoryMode.Off))
+                throw new ConfigException("Managed path belongs to more than one monitor: " + root);
+        }
+        foreach (ManagedFolder owner in folders)
         foreach (string directory in owner.Destinations)
         {
             Paths.NoReparse(directory);

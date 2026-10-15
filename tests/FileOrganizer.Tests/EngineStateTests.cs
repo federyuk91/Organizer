@@ -15,7 +15,7 @@ public sealed class EngineStateTests
         string changed = text.Replace(f.Destination, Path.Combine(f.Root, "new-out")); Configuration config = ConfigurationLoader.Parse(changed);
         ManagedDirectories managed = new(config, prior); EngineStateStore states = new(Path.Combine(f.Root, "state"));
         states.Write(states.Create(f.ConfigPath, changed, config, managed));
-        EngineSnapshot snapshot = states.Read()!; Assert.Equal(2, snapshot.Version);
+        EngineSnapshot snapshot = states.Read()!; Assert.Equal(3, snapshot.Version);
         Assert.Contains(f.Destination, snapshot.Folders[0].Destinations!);
         Assert.Contains(Path.Combine(f.Root, "new-out"), snapshot.Folders[0].Destinations!);
         Assert.Equal(child, Assert.Single(snapshot.Folders[0].PathOverrides!).Path);
