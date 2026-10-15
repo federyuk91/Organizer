@@ -2,28 +2,32 @@
 
 ## Stack and project boundaries
 
-- **R-01**: C#, latest suitable supported .NET LTS at implementation time; target Windows 10/11 x64. Build portable business logic when possible. Use Native AOT where dependencies and behavior permit; standard self-contained publish must also work.
+- **R-01**: C#, .NET 10 LTS (SDK pinned in `global.json`); target Windows 10/11 x64. Build portable business logic when possible. Use Native AOT where dependencies and behavior permit; standard self-contained publish must also work.
 - **R-02**: Headless CLI/worker. No GUI framework in the engine, Windows Service, cloud service, web server, database or Unity. The independent editor uses TOML and shared safe history/undo services; core must not reference UI projects.
-- **R-03**: One per-user background process, asynchronous, minimal allocations, bounded queue/concurrency, event-driven watch rather than recurring directory polling. Per-user autostart via Task Scheduler or HKCU Run, documented and reversible.
+- **R-03**: One per-user background process, asynchronous, minimal allocations, bounded queue/concurrency, event-driven watch rather than recurring directory polling. Per-user autostart via HKCU Run, documented and reversible; no scheduled task is required.
 - **R-04**: Separate config parsing/validation, path analysis, rule matching, queue/watch management, readiness detection, duplicate resolution, safe movement, startup registration and logging. Favor simple testable types over needless interfaces.
 
-Suggested solution (rename if justified):
+Implemented solution:
 
 ```text
-src/FileOrganizer/                # CLI and background host
-src/FileOrganizer.Core/           # config models, validation, matching, processing
-src/FileOrganizer.Windows/        # watchers, startup registration, Win32-specific I/O
- tests/FileOrganizer.Tests/       # unit and safe integration tests
+src/FileOrganizer/                       # independent CLI entry point
+src/FileOrganizer.Core/                  # TOML models/editor, validation, paths, matching
+src/FileOrganizer.Windows/               # worker/watchers, safe transfers, history/undo, autorun, scan launcher
+src/FileOrganizer.Configurator/          # independent WPF editor; references Core and Windows
+tests/FileOrganizer.Tests/              # core/Windows/CLI unit and integration tests
+tests/FileOrganizer.Configurator.Tests/ # STA WPF bindings, state and interaction tests
+installer/ assets/ scripts/              # setup, icon, build/publish/verification
 Config.Example.toml
 README.md REQUIREMENTS.md FUNCTIONAL.md TEST.md
-scripts/build.ps1 scripts/publish.ps1
 ```
+
+The engine never references Configurator. Tomlyn is the only external application library. WPF is published self-contained without trimming; the engine supports Native AOT and standard self-contained publishing.
 
 ## Config schema (version 1)
 
 - **R-05**: TOML versioned `version = 1`; unknown schema versions, unknown relevant enum values, missing required keys, invalid globs/paths, duplicate monitor identifiers, and unsafe paths fail validation. Provide line/location where parser allows. Do not partially apply bad configs.
 - **R-06**: Default config location `%LOCALAPPDATA%\FileOrganizer\config.toml`, override `--config <path>`. Environment variables in source/destination paths expand before validation; nonresolved variables fail validation. Use current user's profile and permissions.
-- **R-07**: `[general]`: `scan_on_startup` (bool), `watch_config_changes` (bool), `dry_run` (bool), `log_level` (`error|warning|info|debug`), `file_ready_timeout_seconds` (positive integer), `max_parallel_moves` (positive, small default). Defaults should be safe and documented.
+- **R-07**: `[general]`: `scan_on_startup` (bool), `watch_config_changes` (bool), `dry_run` (bool), `log_level` (`error|warning|info|debug`), `file_ready_timeout_seconds` (positive integer), `max_parallel_moves` (positive, small default). Parser defaults: true, true, false, warning, 120 and 2 respectively; timeout range 1–86400, concurrency range 1–16. New GUI documents explicitly enable dry run and disable their initial folder.
 - **R-08**: Each `[[folders]]`: unique `name`, absolute `path` after expansion, `enabled`, `recursive`, `[[folders.rules]]` and `[folders.duplicates]`. Each rule has `name`, `enabled`, `destination`, optional `extensions`, `patterns`, `exclude_patterns`, `case_sensitive` (default false). Paths in `destination` are absolute or resolved against **that monitor's source directory**, never the process working directory. Paths to destination directories may be created on move; watch sources must exist and be accessible.
 - **R-09**: First enabled matching rule wins; matches use the file basename (not full path). Within `extensions` OR matching; within `patterns` OR matching; **when both lists are present, both conditions must match** (AND). If neither is present, rule is invalid (prevent catch-all mistakes). Any matching exclusion vetoes that rule. File extensions normalized with leading dot; comparisons default case-insensitive (Windows) and are overrideable per rule. `*` means zero or more characters and `?` one character; anchor against the entire filename. Matching applies only to files, not directories. Unsupported regex is not required.
 - **R-10**: Per-folder duplicate policy: `name_collision = "increment" | "skip"`; `identical_content = "copy" | "skip" | "delete"`; `copy_suffix` is a template containing exactly `{n}` and applied before the extension. On same-name collision, compare sizes then SHA-256 only as necessary. Same content is identified when compared candidates have identical bytes by SHA-256; search only colliding filename candidates, not the entire destination. `copy` produces e.g. `image_copy_1.png`; differing content with `increment` produces `image_1.png`. `skip` leaves source unchanged. `delete` is destructive and opt-in only after strict verification. No silent overwrite. File name suffix generation must cope with already-suffixed source names and existing numbered candidates.
@@ -46,7 +50,7 @@ scripts/build.ps1 scripts/publish.ps1
 - **R-21**: CLI: `run`, `scan`, `validate`, `install`, `uninstall`, `stop`, `--help`, with `--config`. `run --background` detaches its console; autorun uses this mode. Clear exit codes (0 success, nonzero config/runtime failures). Autostart is explicit, not an implicit side effect of `run`. A per-user mutex prevents concurrent workers even with different TOML paths; retain the previous config-scoped lock for compatibility with older workers using the same config. `stop` requests cancellation through a per-user event, without polling or terminating an active transfer forcibly.
 - **R-22**: Bounded rotating logs under LocalAppData, default warning, no repeated idle spam; diagnostic messages for invalid rule/path, rejected moves, retries and watcher recovery. No unbounded log growth.
 - **R-23**: Ship reproducible build/publish scripts, example TOML, tests and usage docs. Report actual metrics only if measured; benchmark idle CPU/RAM/executable size on Windows if environment allows. Do not invent numbers.
-- **R-24**: Reconciliation and managed-directory events apply the owning folder's current first matching rule to every regular file, regardless of provenance. A file already directly inside its winning destination is a no-op before readiness/hashing/duplicate handling. Unmatched files remain. Reuse safe transfers and duplicate policies; if a generated collision name would select a different destination, preserve the source and report the routing conflict rather than create a processing loop. Startup/one-shot/recovery scans include managed scopes; healthy operation remains event-driven with no periodic polling or per-file history.
+- **R-24**: Reconciliation and managed-directory events apply the owning folder's current first matching rule to every regular file, regardless of provenance. A file already directly inside its winning destination is a no-op before readiness/hashing/duplicate handling. Unmatched files remain. Reuse safe transfers and duplicate policies; if a generated collision name would select a different destination, preserve the source and report the routing conflict rather than create a processing loop. Startup/one-shot/recovery scans include managed scopes; healthy operation remains event-driven with no periodic polling or provenance-based routing. The independent seven-day journal serves undo only (R-25/26).
 
 ## Example semantics
 
@@ -60,3 +64,9 @@ With source `%USERPROFILE%\Downloads`, `.ase` → `Images\Aseprite`, `.png|.jpg|
 - **R-28**: A lazy path tree displays excluded branches gray without descendants, direct/partial branches with a filled square, and complete recursive branches with a check. Left click cycles off/direct/recursive/off; right click reverses it. Activating a direct branch reveals one child level without selecting it. Full/off choices replace descendant overrides. Persist edits through validated atomic TOML saves; separate editable draft, read-only file and applied engine scopes. No periodic enumeration.
 - **R-29**: The configurator can launch one-shot CLI scans without a console using the saved validated TOML. Refuse dirty/conflicting drafts and an already-active worker. Provide safe stop for owned scans and the background worker, preserving completed moves. Retain process ownership until exit, bound captured diagnostics and refresh history/state. Do not kill transfers or change autorun; the engine stays independent.
 - **R-30**: A dropdown immediately before rule Add defaults to New rules (existing empty-rule behavior). Images, Documents, Archives, Videos, Audio, 3D, Installers, Fonts, E-books, Subtitles, Torrents, Unity Packages, Source Code and Graphic Projects prefill editable rule names/extensions on Add only. Show included formats, leave destinations unset, append without changing existing priority, and use the existing TOML schema/validation.
+
+## Configuration editor contract
+
+The separate WPF application edits folders, ordered rules, extensions/globs/exclusions, destinations, duplicate policies and general settings through the shared parser and validator. TOML remains the single settings store; Windows autorun and engine diagnostic state are separate operating-system/runtime state.
+
+Preserve comments, raw environment expressions, omitted defaults and unknown properties during editing. Unknown properties unsupported by the engine prevent validation/save rather than being discarded. Validate the exact candidate text before saving; recheck external modifications before committing a flushed same-directory temporary file via atomic replacement with `.bak`, or no-replace creation for new files. Preserve the original and draft on failure. Prompt before discarding unsaved changes; Save As does not migrate autorun. Native pickers and filename preview do not start the engine.

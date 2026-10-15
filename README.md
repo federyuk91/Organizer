@@ -9,13 +9,16 @@ Organizza automaticamente i file su **Windows 10/11 x64**, con regole ordinate e
 - Destinazioni relative o assolute, anche su altri dischi.
 - Riclassificazione dei file già nelle destinazioni quando cambiano le regole, inclusi quelli inseriti manualmente.
 - Gestione dei duplicati, simulazione senza spostamenti e log a dimensione limitata.
-- Configurazione TOML condivisa tra GUI e CLI, con validazione e salvataggio atomico.
+- Configurazione TOML condivisa tra GUI e CLI, con validazione, salvataggio atomico e rilevamento delle modifiche esterne.
+- Albero interattivo dei percorsi gestiti con selezioni dirette, ricorsive ed escluse.
+- Scansione e arresto sicuro dalla GUI, più quattordici categorie rapide per creare regole.
+- Cronologia persistente e annullamento verificato degli spostamenti degli ultimi sette giorni.
 - Avvio con Windows per l’utente corrente, configurabile dalla GUI senza amministratore.
 - Monitoraggio a eventi, coda limitata e nessuna scansione periodica durante il funzionamento normale.
 
 ## Installazione
 
-1. Scarica `FileOrganizer-1.2.4-win-x64-Setup.exe` dalla sezione [Releases](https://github.com/federyuk91/Organizer/releases), quando disponibile. Compilando il repository, il file viene prodotto in `artifacts/installer/`.
+1. Scarica [FileOrganizer-1.2.4-win-x64-Setup.exe](https://github.com/federyuk91/Organizer/releases/download/v1.2.4/FileOrganizer-1.2.4-win-x64-Setup.exe) dalla [release 1.2.4](https://github.com/federyuk91/Organizer/releases/tag/v1.2.4), insieme al checksum `.sha256`. Compilando il repository, il file viene prodotto in `artifacts/installer/`.
 2. Avvia il setup con un doppio clic. Installa motore, configuratore e runtime necessari: sul PC destinatario non servono .NET, PowerShell o Visual Studio.
 3. Mantieni il percorso proposto, `%LOCALAPPDATA%\Programs\FileOrganizer`, oppure scegline uno scrivibile dal tuo utente. L’installazione è per utente e non richiede privilegi amministrativi.
 4. Apri **File Organizer** dal menu Start; puoi scegliere anche il collegamento sul desktop durante il setup.
@@ -24,11 +27,13 @@ L’icona trasparente della cartella viene assegnata automaticamente al programm
 
 Il setup non crea una configurazione attiva, non avvia il motore e non registra l’avvio automatico. `Config.Example.toml` viene installato solo come esempio. Il pacchetto attuale non è firmato digitalmente: Windows potrebbe mostrare un avviso di editore sconosciuto; verifica provenienza e hash SHA-256 prima di eseguirlo.
 
+Per controllare la versione installata, apri le proprietà di `%LOCALAPPDATA%\Programs\FileOrganizer\FileOrganizer.Configurator.exe`, scheda **Dettagli → Versione file**. Dopo un aggiornamento anche il motore in `engine\FileOrganizer.exe` deve riportare la stessa versione. La voce nelle app installate viene aggiornata dal setup.
+
 ### Prima configurazione
 
 1. Premi **New** nel configuratore: la simulazione (`dry_run`) è attiva e la nuova cartella è disabilitata.
 2. Scegli la sorgente con **Browse**, abilitala e configura le regole. La prima regola attiva che corrisponde determina la destinazione. Estensioni e pattern, se entrambi specificati, devono entrambi corrispondere.
-3. Usa **Filename Preview** e **Validate** per controllare filtri e percorsi.
+3. Usa **Filename Preview** e **Validate** per controllare i filtri. In **Managed paths**, verifica quali directory sono incluse nella bozza prima di salvare: con **Recursive** disattivato vengono elaborati solo i file diretti della sorgente e di ogni destinazione esplicita.
 4. Salva con **Save As** in `%LOCALAPPDATA%\FileOrganizer\config.toml`. Crea la cartella `FileOrganizer` se il dialogo lo richiede.
 5. Premi **Avvia scansione** nella GUI. Con la simulazione attiva non viene spostato nulla; l'esito appare in basso. È disponibile anche **Scansione adesso** dal menu Start.
 6. Dopo la verifica, disattiva `dry_run`, salva e usa **Avvia organizzazione** per il monitoraggio continuo. La finestra del motore deve restare aperta; `Ctrl+C` lo arresta.
@@ -75,7 +80,7 @@ Dalla versione 1.2.0, `recursive=false` limita sia sorgente sia ogni destinazion
 
 Salvare nuove regole può quindi spostare subito file già organizzati, se il motore è attivo e osserva il TOML. Un cambiamento di destinazione mantiene gestita quella precedente per la sessione corrente. Dopo un riavvio rimangono gestite solo le destinazioni attuali o quelle ancora coperte da una sorgente ricorsiva/destinazione attiva. Destinazioni sovrapposte appartenenti a monitor diversi vengono rifiutate. Se un suffisso generato per un duplicato cambia la destinazione vincente, il file sorgente viene preservato e il conflitto segnalato nel log.
 
-## Albero dei percorsi (1.2.0)
+## Albero dei percorsi
 
 Apri **Managed paths** e scegli **Draft**, **Saved file** o **Applied engine**, poi **Load / refresh paths**. Le ultime due viste sono in sola lettura; quella applicata include anche le vecchie destinazioni ancora gestite nella sessione. Con motore fermo o precedente alla 1.2.0, il suo ambito è dichiarato non verificabile.
 
@@ -95,7 +100,7 @@ Con `recursive=false` e destinazioni `Images` e `Images\AI`, i file direttamente
 
 Nella GUI puoi usare **Avvia scansione** per una scansione singola con il TOML salvato e validato. Salva prima le modifiche e risolvi eventuali conflitti. Se il motore è già attivo in background, arrestalo con **Arresta scansione** e attendi che risulti fermo prima di avviare la scansione singola. Il blocco per utente impedisce elaborazioni simultanee anche in caso di clic concorrenti.
 
-**Arresta scansione** richiede un arresto sicuro: gli spostamenti già completati restano registrati e non vengono annullati. La GUI attende l'uscita del motore, senza terminarlo forzatamente; il motore rimane fermo. Nessun terminale viene aperto e l'esito appare in basso. Con `dry_run=true` viene eseguita una simulazione. Al termine si aggiornano cronologia e stato applicato. I pulsanti non modificano l'avvio automatico di Windows.
+**Arresta scansione** richiede un arresto sicuro: gli spostamenti già completati restano registrati e non vengono annullati. Per una scansione avviata dalla GUI, il configuratore attende l'uscita del processo senza terminarlo forzatamente. Per un motore già in background invia la richiesta di arresto: usa **Verify state** per verificarne la conclusione. Il motore rimane fermo. Nessun terminale viene aperto e l'esito appare in basso. Con `dry_run=true` viene eseguita una simulazione. Al termine si aggiornano cronologia e stato applicato. I pulsanti non modificano l'avvio automatico di Windows.
 
 Dal terminale, nel percorso di installazione:
 
@@ -119,15 +124,28 @@ La simulazione scrive in console senza creare destinazioni o log. Nell’esecuzi
 
 `stop` richiede l’arresto sicuro dell’unico motore dell’utente, indipendentemente dal TOML. `run --background` scollega la console: per leggere una simulazione usa `scan` in primo piano; gli errori di avvio in background sono registrati in `logs\startup`. L’aggiornamento del setup converte le registrazioni autorun già appartenenti a questa installazione alla modalità background, conservando il percorso del TOML.
 
-Per organizzare solo i file direttamente in Downloads, lascia **Recursive** disattivato. Attivandolo si elaborano anche file interni a programmi e archivi già estratti: non distingue queste cartelle dalle altre. Le destinazioni gestite rimangono ricorsive anche con la sorgente non ricorsiva.
+Per organizzare solo i file direttamente in Downloads, lascia **Recursive** disattivato. Attivandolo si elaborano anche file interni a programmi e archivi già estratti: non distingue queste cartelle dalle altre. Anche ogni destinazione esplicita segue questo valore: con `recursive=false` vengono ricontrollati solo i suoi file diretti. Le selezioni individuali nell’albero hanno precedenza; una destinazione annidata configurata esplicitamente viene comunque controllata come percorso autonomo.
 
 ## Configuratore
 
-Puoi aggiungere, eliminare, duplicare, abilitare/disabilitare e riordinare cartelle e regole; modificare filtri, esclusioni, destinazioni, duplicati e impostazioni generali. I percorsi possono contenere variabili d’ambiente.
+Puoi aggiungere, eliminare, duplicare, abilitare/disabilitare e riordinare cartelle e regole; modificare filtri, esclusioni, destinazioni, duplicati e impostazioni generali. Sorgenti e destinazioni possono contenere variabili d’ambiente; gli override dei percorsi nell’albero sono invece letterali.
 
 **Save** valida l’intero documento con il parser del motore, conserva commenti e impostazioni e scrive atomicamente, mantenendo una copia `.bak`. Le modifiche esterne impediscono di sovrascrivere una versione più recente: usa **Reload** o **Save As**. La scheda TOML consente modifiche dirette; applicale con **Apply TOML** prima di riprendere l’editing dei campi. Proprietà sconosciute vengono conservate, ma bloccano il salvataggio se il motore non le accetta.
 
 Scorciatoie: `Ctrl+S` salva, `Ctrl+O` apre, `Ctrl+N` crea. Salvare con un nuovo nome non trasferisce una registrazione di avvio del vecchio TOML. Il toggle autorun non indica se il processo è attualmente in esecuzione.
+
+### Impostazioni generali e valori predefiniti
+
+| Campo TOML | Default del parser | Effetto |
+|---|---|---|
+| `scan_on_startup` | `true` | Scansione iniziale per `run`; `scan` esegue sempre una scansione singola. |
+| `watch_config_changes` | `true` | Ricarica e riconcilia solo configurazioni valide; altrimenti conserva l’ultima valida. |
+| `dry_run` | `false` | Se attivo, mostra le operazioni senza scrivere file o cronologia. **New** nella GUI lo imposta a `true`. |
+| `log_level` | `warning` | `error`, `warning`, `info` o `debug`. |
+| `file_ready_timeout_seconds` | `120` | Attesa massima di disponibilità; intervallo accettato 1–86400. |
+| `max_parallel_moves` | `2` | Limite di concorrenza; intervallo accettato 1–16. |
+
+La politica duplicati predefinita è `name_collision="increment"`, `identical_content="copy"`, `copy_suffix="_copy_{n}"`: conserva entrambi i file. `identical_content="delete"` richiede una scelta esplicita e non è annullabile tramite History.
 
 ## Sicurezza e limiti
 
@@ -172,7 +190,7 @@ Output in `artifacts/publish/`. Per AOT basta `FileOrganizer.exe`; per motore st
 
 `scripts/build.ps1` compila l’intera soluzione ed esegue i test; `-EngineOnly` esclude WPF. Per includere il test fisico tra volumi, imposta `FILEORGANIZER_TEST_SECOND_VOLUME` su un percorso temporaneo scrivibile in un altro disco. Il test crea e rimuove solo una propria sottocartella univoca. In assenza di questa variabile quel test viene saltato; i test non usano le vere cartelle Download o Desktop.
 
-Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **147 test superati** (127 core/integrazione, 20 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Accesso reale a Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
+Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **147 test superati** (127 core/integrazione, 20 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Avvio effettivo al login Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
 
 Il setup è stato verificato con installazione per utente senza amministratore, collegamenti, motore installato, simulazione, avvio/chiusura GUI, reinstallazione senza perdita del TOML, disinstallazione e rimozione selettiva dell’autorun. Puoi ripetere la prova con `./scripts/verify-installer.ps1`: usa una cartella sotto `artifacts/installer`, crea temporaneamente proprie voci HKCU e le pulisce alla fine. Richiede un account senza installazioni o collegamenti File Organizer preesistenti, per non interferire con l’uso reale. I log restano negli artefatti di verifica.
 
@@ -208,7 +226,7 @@ Seleziona una o più righe con Ctrl/Shift e premi **Undo selected**. Dopo la con
 
 Ogni file viene verificato tramite identità del filesystem, dimensione, data di modifica e SHA-256. Se è stato modificato, sostituito, eliminato o il percorso originale è occupato, viene saltato con una spiegazione. Non si sovrascrivono file. Junction e hard link vengono rifiutati anche durante l’annullamento.
 
-La cronologia inizia con questa versione: non ricostruisce automaticamente i movimenti precedenti, le operazioni manuali o le cancellazioni di duplicati identici. Non è un backup del contenuto dei file. Il registro contiene percorsi, identità e hash, resta nel profilo utente in `%LOCALAPPDATA%\FileOrganizer\history` e non viene usato per decidere le regole di classificazione. I metadati scaduti vengono eliminati durante le operazioni, senza timer periodici; la scadenza non elimina mai file organizzati.
+La cronologia è disponibile dalla versione 1.1.0 e registra solo gli spostamenti eseguiti da un motore che la supporta: non ricostruisce automaticamente i movimenti precedenti, le operazioni manuali o le cancellazioni di duplicati identici. Non è un backup del contenuto dei file. Il registro contiene percorsi, identità e hash, resta nel profilo utente in `%LOCALAPPDATA%\FileOrganizer\history` e non viene usato per decidere le regole di classificazione. I metadati scaduti vengono eliminati durante le operazioni, senza timer periodici; la scadenza non elimina mai file organizzati.
 
 Il motore salva e forza su disco il record prima di uno spostamento. Se non può registrarlo, ferma le elaborazioni. Le scritture incomplete in coda sono recuperate conservando l’ultimo record completo; un trasferimento interrotto viene annullato solo quando il suo risultato è verificabile. Lo hashing aggiunge una lettura sequenziale dei file effettivamente spostati; non vengono create copie di backup per gli spostamenti sullo stesso volume.
 

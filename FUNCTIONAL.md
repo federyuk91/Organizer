@@ -19,13 +19,16 @@ This document defines processing flow; see `REQUIREMENTS.md` for config/schema a
 MAIN(args):
   parse CLI; resolve absolute config path
   if help: display usage; exit
-  if install/uninstall: modify ONLY app's per-user startup entry; exit
+  if stop: signal the per-user stop event without loading TOML; exit
+  if uninstall: remove ONLY this config's per-user startup entry without loading TOML; exit
   candidate = parse(config); validateSchema(candidate)
   paths = expandEnvironmentAndNormalize(candidate)
   validateAllActiveSourcesAndDestinationsGlobally(paths)
   if invalid: print diagnostics; exit nonzero
   if validate: exit 0
-  if run: acquire single-instance lock scoped to config path
+  if install: register the engine with run --background for this validated config; exit
+  if run OR scan: acquire per-user instance lease and legacy same-config lock
+  initialize movement journal; publish diagnostic state only outside dry run
   initialize bounded logger, queue, workers, watchers (run only)
   if scan OR (run AND scan_on_startup):
     enumerate direct files in each active source/destination/selected path once; descend only where its effective mode is recursive,
@@ -100,7 +103,7 @@ RESOLVE(source, destDir, policy):
 
 Check the actual target identity immediately before transfer. Use platform no-replace operations / creation-exclusive reservations where appropriate; a mere `File.Exists` guard is insufficient. For identical-content `delete`, verify the same source and destination remain unchanged across comparison before deletion; treat failures or file modification as `skip` and log. Ensure rules cannot delete the source in place of its own target.
 
-Before committing a generated collision name, run first-match selection on that basename. If it chooses a different directory (or no rule), reject the operation with the original intact. This makes committed placement a fixed point without persisting file provenance. Managed scopes include their descendants, so a manually placed file in `Images/Inbox` can move directly to `Images/Cats` or back to `Images` according to current rules.
+Before committing a generated collision name, run first-match selection on that basename. If it chooses a different directory (or no rule), reject the operation with the original intact. This makes committed placement a fixed point without persisting file provenance. Managed scopes include descendants only when selected by the effective directory policy. A manually placed file in `Images/Inbox` can be reclassified only if that directory is included recursively or explicitly; `recursive=false` on `Images` alone leaves it untouched.
 
 ## Move / copy transaction
 
@@ -157,3 +160,9 @@ Resolve each directory with the shared DirectoryScope policy. An excluded ancest
 Tree states are off (gray, no descendant nodes), direct/partial (filled square), and complete recursive (check). Off → direct loads only immediate child names, not descendants, without selecting children. Full/off choices discard descendant overrides; direct also resets descendant selection so future children stay excluded. Left click cycles off/direct/full/off; right click reverses it. A recursive node with exceptions displays partial. The editable tree is a draft; saved and live-process views are read-only and marked stale on changes. No timer enumerates the filesystem. Reparse points are always excluded.
 
 Directories verified to have no subfolders display only off/complete and toggle between those states in either direction. Existing direct selection is complete for current files; future subfolders still follow the saved mode. Detect leaves with a one-level query, on demand, without periodic enumeration. Deduplicate canonical paths across all monitors; nest known roots beneath the shortest configured ancestor and open only configured chains. Intermediate unmonitored containers show their explicitly managed descendants without enumerating other contents or enabling direct-file processing; their tooltip explains this distinction.
+
+## F-13 — GUI scan controls and quick rules
+
+Start scan requires a saved, unchanged, valid TOML and an existing engine executable. Refuse unsaved/conflicting drafts and an active per-user worker. Launch the independent CLI `scan --config <saved-path>` without a console; keep only the last 4096 characters of each output stream. Safe cancellation requests the shared stop event and retains the child process until exit; never kill a transfer. A stop request for an existing background worker does not wait for its exit: refresh verified state before another launch. Neither action changes autorun. Refresh history and disk/runtime state after an owned scan finishes.
+
+Preset selection alone changes no rules. Add appends an editable rule with the chosen name/extensions, blank destination and no patterns/exclusions. New rules retains empty-rule behavior. The fourteen named presets share the ordinary TOML schema and validation; overlapping categories follow existing first-match priority with no automatic reordering.
