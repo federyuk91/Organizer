@@ -1,4 +1,8 @@
-param([string]$InstallerPath = 'artifacts/installer/FileOrganizer-1.0.0-win-x64-Setup.exe')
+param(
+    [string]$InstallerPath = 'artifacts/installer/FileOrganizer-1.0.1-win-x64-Setup.exe',
+    [switch]$Isolated,
+    [string]$CompilerPath
+)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $installer = (Resolve-Path -LiteralPath $InstallerPath).Path
@@ -8,6 +12,30 @@ $install = Join-Path $fixture 'application'
 $group = 'File Organizer'
 $menu = Join-Path ([Environment]::GetFolderPath('Programs')) $group
 $uninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{3E9CD6A4-C084-4A41-9C10-4AF015B3A2EE}_is1'
+if ($Isolated) {
+    $build = Get-Content -LiteralPath "$installer.build.json" -Raw | ConvertFrom-Json
+    $setupSource = Join-Path $root 'installer/FileOrganizer.iss'
+    if ((Get-FileHash -LiteralPath $setupSource -Algorithm SHA256).Hash -ne $build.SetupSourceHash) { throw 'Installer source changed since build; rebuild before verification.' }
+    if (!$CompilerPath) {
+        $compilerCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+        $CompilerPath = if ($compilerCommand) { $compilerCommand.Source } else { Join-Path $root 'artifacts/tools/inno/ISCC.exe' }
+    }
+    if (!(Test-Path -LiteralPath $CompilerPath)) { throw 'Isolated verification requires -CompilerPath <ISCC.exe>.' }
+    New-Item -ItemType Directory -Force $fixture | Out-Null
+    $testGuid = [Guid]::NewGuid().ToString().ToUpperInvariant()
+    $group = "File Organizer Verification $identity"
+    $menu = Join-Path ([Environment]::GetFolderPath('Programs')) $group
+    $uninstallKey = "Software\Microsoft\Windows\CurrentVersion\Uninstall\{$testGuid}_is1"
+    # The same payload and setup logic use a separate app identity and shortcut group only in this test copy.
+    $testSource = [IO.File]::ReadAllText($setupSource).Replace('3E9CD6A4-C084-4A41-9C10-4AF015B3A2EE', $testGuid).
+        Replace('DefaultGroupName=File Organizer', "DefaultGroupName=$group").
+        Replace('OutputBaseFilename=FileOrganizer-{#AppVersion}-win-x64-Setup', 'OutputBaseFilename=FileOrganizer-{#AppVersion}-win-x64-Verification-Setup')
+    $testScript = Join-Path $fixture 'verification.iss'
+    [IO.File]::WriteAllText($testScript, $testSource)
+    & $CompilerPath /Q "/DAppVersion=$($build.Version)" "/DPayloadDir=$($build.Payload)" "/O$fixture" $testScript
+    if ($LASTEXITCODE -ne 0) { throw 'Isolated installer compilation failed' }
+    $installer = Join-Path $fixture "FileOrganizer-$($build.Version)-win-x64-Verification-Setup.exe"
+}
 $runKey = 'Software\Microsoft\Windows\CurrentVersion\Run'
 $ownedName = "FileOrganizer-$identity"
 $otherName = "FileOrganizer-other-$identity"
@@ -33,7 +61,7 @@ try {
         }
         finally { $registry.Dispose() }
     }
-    foreach ($required in @('FileOrganizer.Configurator.exe', 'engine/FileOrganizer.exe', 'Config.Example.toml', 'README.md', 'licenses/Tomlyn.txt', 'unins000.exe')) {
+    foreach ($required in @('FileOrganizer.Configurator.exe', 'engine/FileOrganizer.exe', 'FileOrganizer.ico', 'Config.Example.toml', 'README.md', 'licenses/Tomlyn.txt', 'unins000.exe')) {
         if (!(Test-Path -LiteralPath (Join-Path $install $required))) { throw "Installed file missing: $required" }
     }
     if (Get-ChildItem -LiteralPath $install -Recurse -File | Where-Object { $_.Name -in @('AGENTS.md', 'GUI_PLAN.md', 'Config.Downloads.toml') -or $_.Extension -eq '.pdb' }) {
@@ -43,8 +71,10 @@ try {
     foreach ($shortcut in @('File Organizer', 'Avvia organizzazione', 'Scansione adesso', 'Disinstalla File Organizer')) {
         $link = Join-Path $menu "$shortcut.lnk"
         if (!(Test-Path -LiteralPath $link)) { throw "Shortcut missing: $shortcut" }
-        $target = $shell.CreateShortcut($link).TargetPath
+        $shortcutData = $shell.CreateShortcut($link)
+        $target = $shortcutData.TargetPath
         if (!(Test-Path -LiteralPath $target)) { throw "Shortcut target missing: $target" }
+        if ($shortcutData.IconLocation -ne "$install\FileOrganizer.ico,0") { throw "Shortcut icon missing: $shortcut" }
     }
     $config = Join-Path $install 'user-settings.toml'
     $text = [IO.File]::ReadAllText((Join-Path $install 'Config.Example.toml'))

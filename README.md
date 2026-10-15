@@ -15,10 +15,12 @@ Organizza automaticamente i file su **Windows 10/11 x64**, con regole ordinate e
 
 ## Installazione
 
-1. Scarica `FileOrganizer-1.0.0-win-x64-Setup.exe` dalla sezione [Releases](https://github.com/federyuk91/Organizer/releases), quando disponibile. Compilando il repository, il file viene prodotto in `artifacts/installer/`.
+1. Scarica `FileOrganizer-1.0.1-win-x64-Setup.exe` dalla sezione [Releases](https://github.com/federyuk91/Organizer/releases), quando disponibile. Compilando il repository, il file viene prodotto in `artifacts/installer/`.
 2. Avvia il setup con un doppio clic. Installa motore, configuratore e runtime necessari: sul PC destinatario non servono .NET, PowerShell o Visual Studio.
 3. Mantieni il percorso proposto, `%LOCALAPPDATA%\Programs\FileOrganizer`, oppure scegline uno scrivibile dal tuo utente. L’installazione è per utente e non richiede privilegi amministrativi.
 4. Apri **File Organizer** dal menu Start; puoi scegliere anche il collegamento sul desktop durante il setup.
+
+L’icona trasparente della cartella viene assegnata automaticamente al programma, alle finestre, al setup e ai collegamenti creati durante l’installazione.
 
 Il setup non crea una configurazione attiva, non avvia il motore e non registra l’avvio automatico. `Config.Example.toml` viene installato solo come esempio. Il pacchetto attuale non è firmato digitalmente: Windows potrebbe mostrare un avviso di editore sconosciuto; verifica provenienza e hash SHA-256 prima di eseguirlo.
 
@@ -112,10 +114,10 @@ Requisiti di sviluppo: Windows x64 e .NET 10 SDK (versione in [global.json](glob
 
 ```powershell
 ./scripts/build.ps1
-./scripts/build-installer.ps1 -Version 1.0.0
+./scripts/build-installer.ps1 -Version 1.0.1
 
 # Fallback senza toolchain C++:
-./scripts/build-installer.ps1 -Version 1.0.0 -EngineMode Standard
+./scripts/build-installer.ps1 -Version 1.0.1 -EngineMode Standard
 
 # Compilatore Inno in un percorso diverso:
 ./scripts/build-installer.ps1 -CompilerPath "C:\tools\Inno Setup 6\ISCC.exe"
@@ -142,7 +144,9 @@ Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **94 test superati*
 
 Il setup è stato verificato con installazione per utente senza amministratore, collegamenti, motore installato, simulazione, avvio/chiusura GUI, reinstallazione senza perdita del TOML, disinstallazione e rimozione selettiva dell’autorun. Puoi ripetere la prova con `./scripts/verify-installer.ps1`: usa una cartella sotto `artifacts/installer`, crea temporaneamente proprie voci HKCU e le pulisce alla fine. Richiede un account senza installazioni o collegamenti File Organizer preesistenti, per non interferire con l’uso reale. I log restano negli artefatti di verifica.
 
-Campione a riposo dopo due secondi di riscaldamento, una cartella abilitata, simulazione e nessun evento:
+Se hai già installato File Organizer, usa `./scripts/verify-installer.ps1 -Isolated`: ricompila lo stesso payload con un’identità e un gruppo di collegamenti separati, senza modificare l’installazione reale. Richiede Inno Setup e il file locale `.build.json` prodotto dalla build; per un compilatore non rilevato passa `-CompilerPath`. La verifica controlla anche l’icona assegnata ai collegamenti.
+
+Campione della versione 1.0.0 a riposo dopo due secondi di riscaldamento, una cartella abilitata, simulazione e nessun evento:
 
 | Motore | Eseguibile | Memoria working set | Tempo CPU nel campione |
 |---|---:|---:|---:|
@@ -159,5 +163,7 @@ Sono osservazioni su questa macchina, non garanzie. `scripts/verify-publish.ps1`
 - `src/FileOrganizer.Configurator`: editor WPF indipendente.
 - `tests`: test core, Windows e WPF.
 - `installer` e `scripts`: setup, build, publish e verifiche.
+
+`assets/FileOrganizer.png` è il sorgente trasparente dell’icona; `scripts/build-icon.ps1` genera `assets/FileOrganizer.ico` con dieci risoluzioni da 16 a 256 pixel e canale alpha. Entrambi gli eseguibili e il setup utilizzano questo asset, senza dipendenze grafiche aggiuntive nel motore.
 
 Tomlyn è l’unica dipendenza applicativa esterna; xUnit è usato nei test. Per problemi o proposte, apri una [issue](https://github.com/federyuk91/Organizer/issues) includendo versione, errore e una configurazione depurata da percorsi o dati personali.

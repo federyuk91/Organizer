@@ -4,8 +4,10 @@
     <UseWPF>true</UseWPF>
     <OutputType>WinExe</OutputType>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationIcon>../../assets/FileOrganizer.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="../../assets/FileOrganizer.ico" Link="Assets/FileOrganizer.ico" />
     <ProjectReference Include="../FileOrganizer.Core/FileOrganizer.Core.csproj" />
     <ProjectReference Include="../FileOrganizer.Windows/FileOrganizer.Windows.csproj" />
   </ItemGroup>

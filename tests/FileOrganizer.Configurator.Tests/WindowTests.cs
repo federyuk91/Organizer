@@ -23,6 +23,7 @@ public sealed class WindowTests
         using TestFixture f = new();
         MainWindow window = new(f.Config) { Left = -20000, Top = -20000, ShowInTaskbar = false };
         window.Show();
+        Assert.NotNull(window.Icon);
         EditorViewModel vm = (EditorViewModel)window.DataContext;
         try
         {

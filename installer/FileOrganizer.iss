@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 #ifndef PayloadDir
   #error PayloadDir must point to the staged installer payload.
@@ -22,7 +22,8 @@ OutputBaseFilename=FileOrganizer-{#AppVersion}-win-x64-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayIcon={app}\FileOrganizer.Configurator.exe
+SetupIconFile={#PayloadDir}\FileOrganizer.ico
+UninstallDisplayIcon={app}\FileOrganizer.ico
 CloseApplications=no
 RestartApplications=no
 DisableProgramGroupPage=yes
@@ -40,11 +41,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\File Organizer"; Filename: "{app}\FileOrganizer.Configurator.exe"; WorkingDir: "{app}"
-Name: "{group}\Avvia organizzazione"; Filename: "{app}\engine\FileOrganizer.exe"; Parameters: "run"; WorkingDir: "{app}"
-Name: "{group}\Scansione adesso"; Filename: "{app}\engine\FileOrganizer.exe"; Parameters: "scan"; WorkingDir: "{app}"
-Name: "{group}\Disinstalla File Organizer"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\File Organizer"; Filename: "{app}\FileOrganizer.Configurator.exe"; Tasks: desktopicon
+Name: "{group}\File Organizer"; Filename: "{app}\FileOrganizer.Configurator.exe"; WorkingDir: "{app}"; IconFilename: "{app}\FileOrganizer.ico"
+Name: "{group}\Avvia organizzazione"; Filename: "{app}\engine\FileOrganizer.exe"; Parameters: "run"; WorkingDir: "{app}"; IconFilename: "{app}\FileOrganizer.ico"
+Name: "{group}\Scansione adesso"; Filename: "{app}\engine\FileOrganizer.exe"; Parameters: "scan"; WorkingDir: "{app}"; IconFilename: "{app}\FileOrganizer.ico"
+Name: "{group}\Disinstalla File Organizer"; Filename: "{uninstallexe}"; IconFilename: "{app}\FileOrganizer.ico"
+Name: "{autodesktop}\File Organizer"; Filename: "{app}\FileOrganizer.Configurator.exe"; Tasks: desktopicon; IconFilename: "{app}\FileOrganizer.ico"
 
 [Run]
 Filename: "{app}\FileOrganizer.Configurator.exe"; Description: "{cm:LaunchProgram,File Organizer}"; Flags: nowait postinstall skipifsilent unchecked
