@@ -1,4 +1,6 @@
 # Example only. Adjust paths before running. This configuration is NOT auto-installed.
+# Destinations are also reconciled recursively, including manually placed files.
+# Changing rule priority may move files that are already organized.
 version = 1
 
 [general]

@@ -20,7 +20,7 @@ Use xUnit or another lightweight mainstream .NET test framework. Tests must oper
 | T-07 | R-13 | Destination identical to own source is rejected. |
 | T-08 | R-13 | Destination identical to *different* source is rejected. |
 | T-09 | R-13/15 | Aliases via case, separator, `.`, `..` rejected; test junction/symlink identity on supported Windows setup. |
-| T-10 | R-14/15 | Nested destination under nonrecursive source accepted; recursive destination excluded or config rejected; overlap/cycle detected across folders. |
+| T-10 | R-11/14/15 | Nested destinations have explicit managed ownership and are skipped by ordinary source traversal; reject overlapping destinations belonging to different monitors. |
 | T-11 | R-15/16 | Duplicate monitor paths rejected, self moves and reparse redirection never executed. |
 
 ## Collisions and movement
@@ -50,6 +50,10 @@ Use xUnit or another lightweight mainstream .NET test framework. Tests must oper
 | T-27 | R-21 | Per-user autostart install/uninstall test uses isolated or mock registry/task layer; never changes developer machine implicitly. |
 | T-28 | R-22 | Log level filters correctly and rotation limits disk use. |
 | T-29 | R-03/23 | Release and Native AOT publish checks on supported Windows toolchain; record real exe size, working set and idle CPU only if measured. |
+| T-30 | R-11/12/24 | Add a higher-priority `*gatt*.png` rule after files are in Images: organized and manually placed files move to Images/Cats without extra source definitions. |
+| T-31 | R-12/24 | Reorder rules in both directions; edit a destination and reconcile its previous session scope; invalid updates retain the old routing snapshot. |
+| T-32 | R-11/17/24 | Watch nested/external managed destinations with a nonrecursive source; handle missing-directory creation and imported directory trees without periodic polling. |
+| T-33 | R-10/16/24 | Reconciliation is idempotent under copy/skip/delete; reuse collision policies and reject generated names that change routing; unmatched/temp/excluded files and dry run stay safe. |
 
 ## Execution checklist
 

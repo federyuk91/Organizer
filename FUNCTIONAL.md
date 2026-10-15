@@ -6,11 +6,12 @@ This document defines processing flow; see `REQUIREMENTS.md` for config/schema a
 
 - **F-01**: Never overwrite an unrelated existing destination object.
 - **F-02**: Never remove the original before a verified, durable-enough target exists (except explicitly chosen identical-content deletion after independent verification).
-- **F-03**: Never organize a file whose source path is (or resolves into) the forbidden destination/monitor exclusion scope.
+- **F-03**: Never organize a file outside its unambiguous source/managed-directory ownership or through a forbidden reparse scope. Destinations are excluded only from ordinary source traversal, not from explicit managed reconciliation.
 - **F-04**: Every individual move uses one immutable, validated config snapshot.
 - **F-05**: Invalid config cannot replace last known good config.
 - **F-06**: A file is handled at most once concurrently; events may coalesce, but overflow cannot be silently ignored.
 - **F-07**: A dry run never mutates the filesystem, including folder creation or deletion.
+- **F-08**: A file directly in its first matching rule's destination is a no-op, including under identical-content `delete`. Every committed collision name must still resolve to that destination.
 
 ## Startup / reload
 
@@ -27,7 +28,8 @@ MAIN(args):
   if run: acquire single-instance lock scoped to config path
   initialize bounded logger, queue, workers, watchers (run only)
   if scan OR (run AND scan_on_startup):
-    snapshot eligible source files, respecting recursion and exclusions
+    enumerate source files and owned managed destination trees once each,
+    respecting source recursion, ownership and reparse exclusions
     enqueue each once
   if scan: drain finite queue; exit with meaningful error status
   if run: await filesystem/config events until stopped
@@ -36,25 +38,29 @@ ON_CONFIG_CHANGE:
   debounce completion of write
   parse + validate whole candidate, including cross-folder path safety
   on failure: log; retain current watchers and immutable rules
-  on success: construct new monitor set, swap configuration atomically
-              reconcile affected folders; dispose obsolete watchers safely
+  on success: retain prior managed destinations for unchanged canonical sources
+              reject ambiguous ownership; build new watches/routing snapshot
+              swap atomically; reconcile sources and managed destinations
+              dispose obsolete watchers safely; reschedule stale queued work
 ```
 
 ## Watch and process
 
 ```text
 WATCH_EVENT(file):
-  ignore directory events and managed-temp extensions
-  normalize path; check it belongs to monitored nonexcluded scope
+  never enqueue directories for transfer; ignore managed-temp extensions
+  find its source/managed-directory owner; skip config/log/temp files
+  coalesce directory creation/reinstatement into watcher refresh/reconciliation
   enqueue if not queued/inflight (small bounded asynchronous channel)
 
 PROCESS(file, immutableSnapshot):
   lock logical source identity to avoid duplicate concurrent handling
   if path no longer exists OR not a regular file: return
-  if excluded, symlink unsafe, or outside active scope: return
+  if excluded, symlink unsafe, or outside owned source/managed scope: return
   rule = first enabled rule matching filename (AND across nonempty
          extensions/patterns sets, OR within each, exclusions override)
   if none: return
+  if parent directory == rule.destination: return without hashing/deletion
   ready = await waitForStableAndAccessibleFile(file, timeout, cancellation)
   if !ready: warn; allow future event/reconciliation; return
   destDir = resolveRelativeOrAbsolute(rule.destination)
@@ -94,6 +100,8 @@ RESOLVE(source, destDir, policy):
 
 Check the actual target identity immediately before transfer. Use platform no-replace operations / creation-exclusive reservations where appropriate; a mere `File.Exists` guard is insufficient. For identical-content `delete`, verify the same source and destination remain unchanged across comparison before deletion; treat failures or file modification as `skip` and log. Ensure rules cannot delete the source in place of its own target.
 
+Before committing a generated collision name, run first-match selection on that basename. If it chooses a different directory (or no rule), reject the operation with the original intact. This makes committed placement a fixed point without persisting file provenance. Managed scopes include their descendants, so a manually placed file in `Images/Inbox` can move directly to `Images/Cats` or back to `Images` according to current rules.
+
 ## Move / copy transaction
 
 ```text
@@ -120,7 +128,7 @@ Cross-volume operations cannot be wholly atomic. Document crash windows, e.g. ve
 ```text
 ON_WATCHER_OVERFLOW_OR_RESTART:
   report event; schedule a bounded reconciliation scan of affected scope
-  dedupe against queued/inflight work; apply current exclusions
+  dedupe against queued/inflight work; apply current ownership and exclusions
 
 ON_SHUTDOWN:
   stop new watch notifications; cancel delayed retries

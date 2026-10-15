@@ -1,0 +1,21 @@
+**/bin/
+**/obj/
+artifacts/
+TestResults/
+.vs/
+.idea/
+*.user
+*.suo
+*.log
+*.bak
+
+# Personal configuration; only the portable example belongs in the repository.
+*.toml
+!/Config.Example.toml
+
+# Local agent instructions and working plans are not project deliverables.
+AGENTS*.md
+GUI_PLAN.md
+.agents/
+.codex/
+SKILL.md
