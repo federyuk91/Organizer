@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using System.ComponentModel;
 using FileOrganizer.Windows;
 
 namespace FileOrganizer.Configurator;
@@ -14,6 +15,20 @@ public abstract class EditorSurface : UserControl
     protected abstract TextBox RawEditor { get; }
     protected abstract DataGrid MovementGrid { get; }
     private bool restoring = true;
+    protected EditorSurface()
+    {
+        DataContextChanged += (_, args) =>
+        {
+            if (args.OldValue is EditorViewModel previous) previous.PropertyChanged -= OnEditorSelectionChanged;
+            if (args.NewValue is EditorViewModel current) current.PropertyChanged += OnEditorSelectionChanged;
+        };
+    }
+    private void OnEditorSelectionChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        // WPF can retain equal rows across source replacement after the model has cleared selection.
+        if (args.PropertyName == nameof(EditorViewModel.HasHistorySelection) && Editor?.HasHistorySelection == false && MovementGrid.SelectedItems.Count > 0)
+            MovementGrid.SelectedItems.Clear();
+    }
     protected EditorViewModel? Editor => DataContext as EditorViewModel;
     public EditorPage SelectedPage => Navigation.SelectedItem is TabItem { Tag: string tag } && Enum.TryParse(tag, out EditorPage page) ? page : EditorPage.Folders;
     public void InitializeModel(EditorViewModel editor) { DataContext = editor; restoring = false; }

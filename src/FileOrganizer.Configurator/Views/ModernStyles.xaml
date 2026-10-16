@@ -11,6 +11,13 @@
  <SolidColorBrush x:Key="SuccessBrush" Color="#12834F"/>
  <SolidColorBrush x:Key="ErrorBrush" Color="#C42B1C"/>
  <SolidColorBrush x:Key="DisabledIconBrush" Color="#798397"/>
+ <SolidColorBrush x:Key="HistoryNeutralBackground" Color="#EEF1F5"/>
+ <SolidColorBrush x:Key="HistoryMovedBackground" Color="#E8F5ED"/>
+ <SolidColorBrush x:Key="HistoryMovedText" Color="#17643D"/>
+ <SolidColorBrush x:Key="HistoryRestoredBackground" Color="#E7F0FE"/>
+ <SolidColorBrush x:Key="HistoryRestoredText" Color="#1759A8"/>
+ <SolidColorBrush x:Key="HistoryWarningBackground" Color="#FFF3D8"/>
+ <SolidColorBrush x:Key="HistoryWarningText" Color="#805B00"/>
  <PathGeometry x:Key="IconNew" Figures="M4,2 L12,2 L17,7 L17,18 L4,18 Z M12,2 L12,7 L17,7"/>
  <PathGeometry x:Key="IconFolder" Figures="M2,6 L2,3 L8,3 L10,6 L18,6 L18,17 L2,17 Z"/>
  <PathGeometry x:Key="IconSave" Figures="M3,2 L15,2 L18,5 L18,18 L2,18 L2,2 Z M6,2 L6,8 L14,8 L14,2 M6,18 L6,12 L14,12 L14,18"/>

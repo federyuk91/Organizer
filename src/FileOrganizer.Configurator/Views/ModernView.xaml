@@ -2,7 +2,7 @@
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:local="clr-namespace:FileOrganizer.Configurator" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13" UseLayoutRounding="True"
  Background="{DynamicResource CanvasBrush}" Foreground="{DynamicResource TextBrush}">
- <local:EditorSurface.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="ModernStyles.xaml"/></ResourceDictionary.MergedDictionaries></ResourceDictionary></local:EditorSurface.Resources>
+ <local:EditorSurface.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="ModernStyles.xaml"/></ResourceDictionary.MergedDictionaries><local:HistoryDisplayConverter x:Key="HistoryDisplay"/></ResourceDictionary></local:EditorSurface.Resources>
  <DockPanel>
   <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceBrush}" Padding="16,12,10,8" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
    <StackPanel>
@@ -129,8 +129,35 @@
    <TabItem Tag="Paths" IsEnabled="{Binding IsInteractive}"><TabItem.Header><StackPanel Orientation="Horizontal"><Path Data="{StaticResource IconPaths}" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.4" Width="13" Height="13" Stretch="Uniform" Margin="0,0,8,0"/><TextBlock Text="Managed paths"/></StackPanel></TabItem.Header>
     <DockPanel Margin="10" IsEnabled="{Binding IsInteractive}">
      <StackPanel DockPanel.Dock="Top">
-      <TextBlock Text="□ Excluded (gray; children hidden)     ■ Partially included branch     ✓ Complete branch / no subfolders" TextWrapping="Wrap" FontWeight="SemiBold"/>
-      <TextBlock Text="Left: □ → ■ → ✓ → □. Right: □ → ✓ → ■ → □. Without subfolders: □ ↔ ✓ with either click. Each path appears once; configured paths are connected automatically. A square includes direct files and selected child branches; a check means all current children are complete. Save to apply. Disabled monitors must first be enabled in Folders and rules." TextWrapping="Wrap" Margin="0,5"/>
+      <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,12">
+       <StackPanel>
+        <TextBlock Text="Stati dei percorsi" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,12"/>
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+         <DockPanel Margin="0,0,18,12">
+          <Border DockPanel.Dock="Left" Width="18" Height="18" CornerRadius="3" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource MutedBrush}" BorderThickness="1" VerticalAlignment="Top" Margin="0,2,10,0"/>
+          <StackPanel><TextBlock Text="Escluso" FontSize="14" FontWeight="SemiBold"/><TextBlock Text="La cartella non viene analizzata. I sottopercorsi restano nascosti." FontSize="14" LineHeight="21" TextWrapping="Wrap" Margin="0,4,0,0"/></StackPanel>
+         </DockPanel>
+         <DockPanel Grid.Column="1" Margin="0,0,18,12">
+          <Border DockPanel.Dock="Left" Width="18" Height="18" CornerRadius="3" Background="{DynamicResource AccentBrush}" VerticalAlignment="Top" Margin="0,2,10,0"><Rectangle Width="8" Height="8" Fill="{DynamicResource AccentTextBrush}"/></Border>
+          <StackPanel><TextBlock Text="Parziale" FontSize="14" FontWeight="SemiBold"/><TextBlock Text="Include i file diretti e solo i sottopercorsi selezionati." FontSize="14" LineHeight="21" TextWrapping="Wrap" Margin="0,4,0,0"/></StackPanel>
+         </DockPanel>
+         <DockPanel Grid.Column="2" Margin="0,0,0,12">
+          <Border DockPanel.Dock="Left" Width="18" Height="18" CornerRadius="3" Background="{DynamicResource AccentBrush}" VerticalAlignment="Top" Margin="0,2,10,0"><Path Data="M3,8 L6,11 L13,4" Stroke="{DynamicResource AccentTextBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/></Border>
+          <StackPanel><TextBlock Text="Completo" FontSize="14" FontWeight="SemiBold"/><TextBlock Text="Tutti i sottopercorsi attuali sono inclusi, oppure la cartella non ne contiene." FontSize="14" LineHeight="21" TextWrapping="Wrap" Margin="0,4,0,0"/></StackPanel>
+         </DockPanel>
+        </Grid>
+        <TextBlock FontSize="14" LineHeight="22" TextWrapping="Wrap"><Run FontWeight="SemiBold" Text="Clic sinistro:&#160;"/><Run Text="Escluso → Parziale → Completo → Escluso."/></TextBlock>
+        <TextBlock FontSize="14" LineHeight="22" TextWrapping="Wrap"><Run FontWeight="SemiBold" Text="Clic destro:&#160;"/><Run Text="stesso ciclo in ordine inverso."/></TextBlock>
+        <TextBlock Text="Le modifiche restano in bozza fino a Save." FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,8,0,0"/>
+        <Expander Header="Dettagli sul funzionamento" Margin="0,10,0,0" FontSize="14">
+         <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto"><StackPanel Margin="0,8,0,0">
+          <TextBlock Text="Senza sottocartelle si passa direttamente da Escluso a Completo, con entrambi i pulsanti del mouse." TextWrapping="Wrap" LineHeight="22" Margin="0,0,0,6"/>
+          <TextBlock Text="La spunta può anche risultare da tutti i figli attuali selezionati: in questo caso le cartelle future seguono le impostazioni salvate. Una selezione esplicita ricorsiva include anche i sottopercorsi futuri." TextWrapping="Wrap" LineHeight="22" Margin="0,0,0,6"/>
+          <TextBlock Text="I rami esclusi sono grigi e non vengono esplorati. Per modificare i percorsi di una cartella disabilitata, abilitala prima nella lista Folders." TextWrapping="Wrap" LineHeight="22"/>
+         </StackPanel></ScrollViewer>
+        </Expander>
+       </StackPanel>
+      </Border>
       <WrapPanel><ComboBox ItemsSource="{x:Static local:EditorViewModel.PathViews}" SelectedItem="{Binding PathView}" Width="160"/><Button Content="Load / refresh paths" Command="{Binding LoadPathsCommand}" Tag="{StaticResource IconRefresh}"/></WrapPanel>
       <TextBlock Text="{Binding TreeStatus}" TextWrapping="Wrap" Margin="0,4,0,8"/>
      </StackPanel>
@@ -152,21 +179,59 @@
    <TabItem Tag="History"><TabItem.Header><StackPanel Orientation="Horizontal"><Path Data="{StaticResource IconHistory}" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.4" Width="13" Height="13" Stretch="Uniform" Margin="0,0,8,0"/><TextBlock Text="History"/></StackPanel></TabItem.Header>
     <DockPanel Margin="10">
      <StackPanel DockPanel.Dock="Top">
-      <TextBlock Text="Recorded moves from the last seven days for the open TOML. Undo checks identity and content, never overwrites files, and leaves the engine stopped. Older moves and duplicate deletions cannot be undone here." TextWrapping="Wrap"/>
-      <CheckBox Content="Show all configurations (including renamed or deleted TOML files)" IsChecked="{Binding ShowAllHistory}" IsEnabled="{Binding IsInteractive}" Margin="0,6"/>
-      <WrapPanel><Button Content="Refresh history" Command="{Binding RefreshHistoryCommand}" Tag="{StaticResource IconRefresh}"/><Button Content="Undo selected" Command="{Binding UndoHistoryCommand}" Tag="{StaticResource IconUndo}"/><Button Content="Cancel undo" Command="{Binding CancelUndoCommand}" Tag="{StaticResource IconCancel}"/><Button Content="Stop engine safely" Command="{Binding StopWorkerCommand}" Tag="{StaticResource IconStop}"/></WrapPanel>
-      <TextBlock Text="{Binding HistoryStatus}" TextWrapping="Wrap" Margin="0,5"/>
+      <TextBlock Text="Cronologia degli ultimi 7 giorni" Style="{StaticResource Heading}"/>
+      <TextBlock Text="Il ripristino verifica i file al momento dell’azione, non sovrascrive gli originali e lascia il motore arrestato." TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,8"/>
+      <Grid IsEnabled="{Binding IsInteractive}"><Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition/><ColumnDefinition Width="1.3*"/><ColumnDefinition Width="1.6*"/></Grid.ColumnDefinitions>
+       <StackPanel Margin="0,0,10,0"><TextBlock Text="Cerca nome o percorso"/><TextBox Text="{Binding HistorySearch, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Cerca nella cronologia"/></StackPanel>
+       <StackPanel Grid.Column="1" Margin="0,0,10,0"><TextBlock Text="Periodo"/><ComboBox ItemsSource="{x:Static local:EditorViewModel.HistoryPeriods}" SelectedItem="{Binding HistoryPeriod}" AutomationProperties.Name="Periodo cronologia"/></StackPanel>
+       <StackPanel Grid.Column="2" Margin="0,0,10,0"><TextBlock Text="Stato"/><ComboBox ItemsSource="{x:Static local:EditorViewModel.HistoryStates}" SelectedItem="{Binding HistoryState}" AutomationProperties.Name="Stato cronologia"/></StackPanel>
+       <StackPanel Grid.Column="3"><TextBlock Text="Cartella"/><ComboBox ItemsSource="{Binding HistoryFolders}" SelectedItem="{Binding HistoryFolder}" AutomationProperties.Name="Cartella cronologia"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource HistoryDisplay}, ConverterParameter=FolderOption}" ToolTip="{Binding}" TextTrimming="CharacterEllipsis"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></StackPanel>
+      </Grid>
+      <WrapPanel><CheckBox Content="Tutte le configurazioni, anche rinominate o eliminate" IsChecked="{Binding ShowAllHistory}" IsEnabled="{Binding IsInteractive}" Margin="0,0,12,8"/><TextBlock Text="{Binding HistoryCount}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,0,8"/></WrapPanel>
+      <WrapPanel><Button Content="Aggiorna" Command="{Binding RefreshHistoryCommand}" Tag="{StaticResource IconRefresh}"/><Button Content="Ripristina selezionati" Command="{Binding UndoHistoryCommand}" Tag="{StaticResource IconUndo}"/><Button Content="Cancel undo" Command="{Binding CancelUndoCommand}" Tag="{StaticResource IconCancel}"/><Button Content="Arresta motore" Command="{Binding StopWorkerCommand}" Tag="{StaticResource IconStop}"/><TextBlock Text="{Binding HistorySelectionSummary}" VerticalAlignment="Center" Margin="6,0,0,6"/></WrapPanel>
+      <TextBlock Text="{Binding HistoryStatus}" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,0,0,8"/>
+      <Expander Header="Esito del ripristino" Margin="0,0,0,8" IsExpanded="True"><Expander.Style><Style TargetType="Expander"><Style.Triggers><DataTrigger Binding="{Binding UndoSummary}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Expander.Style>
+       <StackPanel Margin="0,6,0,0"><TextBlock Text="{Binding UndoSummary}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+        <ListBox ItemsSource="{Binding LastUndoIssues}" MaxHeight="100" BorderThickness="0" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"><ListBox.ItemTemplate><DataTemplate><TextBlock TextWrapping="Wrap"><Run Text="{Binding FileName}" FontWeight="SemiBold"/><Run Text=" — "/><Run Text="{Binding Reason}"/></TextBlock></DataTemplate></ListBox.ItemTemplate></ListBox>
+       </StackPanel>
+      </Expander>
      </StackPanel>
-     <DataGrid x:Name="HistoryGrid" IsEnabled="{Binding IsInteractive}" ItemsSource="{Binding HistoryEntries}" IsReadOnly="True" AutoGenerateColumns="False" SelectionMode="Extended" SelectionUnit="FullRow" SelectionChanged="OnHistorySelectionChanged" EnableRowVirtualization="True" EnableColumnVirtualization="True">
-      <DataGrid.Columns>
-       <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="150"/>
-       <DataGridTextColumn Header="State" Binding="{Binding State}" Width="100"/>
-       <DataGridTextColumn Header="Original path" Binding="{Binding Source}" Width="*"/>
-       <DataGridTextColumn Header="Destination" Binding="{Binding Destination}" Width="*"/>
-       <DataGridTextColumn Header="Bytes" Binding="{Binding Size}" Width="90"/>
-       <DataGridTextColumn Header="TOML" Binding="{Binding ConfigPath}" Width="160"/>
-      </DataGrid.Columns>
-     </DataGrid>
+     <Grid x:Name="HistoryBody"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <DataGrid x:Name="HistoryGrid" IsEnabled="{Binding IsInteractive}" ItemsSource="{Binding HistoryView}" IsReadOnly="True" AutoGenerateColumns="False" SelectionMode="Extended" SelectionUnit="FullRow" SelectionChanged="OnHistorySelectionChanged" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling" HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource LineBrush}" Background="{DynamicResource SurfaceBrush}" RowBackground="{DynamicResource SurfaceBrush}" AlternatingRowBackground="{DynamicResource CanvasBrush}" BorderBrush="{DynamicResource LineBrush}" RowHeight="40" CanUserAddRows="False" CanUserDeleteRows="False">
+       <DataGrid.Resources>
+        <Style TargetType="DataGridColumnHeader"><Setter Property="Padding" Value="10,8"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Background" Value="{DynamicResource HoverBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/><Setter Property="BorderThickness" Value="0,0,0,1"/></Style>
+        <Style TargetType="DataGridCell"><Setter Property="Padding" Value="8,4"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="{DynamicResource HoverBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/></Trigger><Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger></Style.Triggers></Style>
+        <Style x:Key="HistoryCellText" TargetType="TextBlock"><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="Margin" Value="8,0"/></Style>
+       </DataGrid.Resources>
+       <DataGrid.Columns>
+        <DataGridTextColumn Header="Data e ora" SortMemberPath="Time" Binding="{Binding Time, Converter={StaticResource HistoryDisplay}, ConverterParameter=Time}" Width="136" ElementStyle="{StaticResource HistoryCellText}"/>
+        <DataGridTemplateColumn Header="Stato" SortMemberPath="State" Width="158"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+         <Border CornerRadius="5" Padding="7,4" Margin="4,5" HorizontalAlignment="Left"><Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource HistoryNeutralBackground}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource MutedBrush}"/><Style.Triggers>
+          <DataTrigger Binding="{Binding State}" Value="Committed"><Setter Property="Background" Value="{DynamicResource HistoryMovedBackground}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource HistoryMovedText}"/></DataTrigger>
+          <DataTrigger Binding="{Binding State}" Value="Undone"><Setter Property="Background" Value="{DynamicResource HistoryRestoredBackground}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource HistoryRestoredText}"/></DataTrigger>
+          <DataTrigger Binding="{Binding State}" Value="Prepared"><Setter Property="Background" Value="{DynamicResource HistoryWarningBackground}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource HistoryWarningText}"/></DataTrigger>
+          <DataTrigger Binding="{Binding State}" Value="UndoPrepared"><Setter Property="Background" Value="{DynamicResource HistoryWarningBackground}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource HistoryWarningText}"/></DataTrigger>
+         </Style.Triggers></Style></Border.Style><TextBlock Text="{Binding State, Converter={StaticResource HistoryDisplay}, ConverterParameter=State}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding State, Converter={StaticResource HistoryDisplay}, ConverterParameter=State}"/></Border>
+        </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+        <DataGridTextColumn Header="File" SortMemberPath="Source" Binding="{Binding Source, Converter={StaticResource HistoryDisplay}, ConverterParameter=Name}" Width="1.4*" MinWidth="140"><DataGridTextColumn.ElementStyle><Style TargetType="TextBlock" BasedOn="{StaticResource HistoryCellText}"><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="ToolTip" Value="{Binding Source}"/></Style></DataGridTextColumn.ElementStyle></DataGridTextColumn>
+        <DataGridTextColumn Header="Da" SortMemberPath="Source" Binding="{Binding Source, Converter={StaticResource HistoryDisplay}, ConverterParameter=Folder}" Width="*" MinWidth="100"><DataGridTextColumn.ElementStyle><Style TargetType="TextBlock" BasedOn="{StaticResource HistoryCellText}"><Setter Property="ToolTip" Value="{Binding Source}"/><Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/></Style></DataGridTextColumn.ElementStyle></DataGridTextColumn>
+        <DataGridTextColumn Header="A" SortMemberPath="Destination" Binding="{Binding Destination, Converter={StaticResource HistoryDisplay}, ConverterParameter=Folder}" Width="*" MinWidth="100"><DataGridTextColumn.ElementStyle><Style TargetType="TextBlock" BasedOn="{StaticResource HistoryCellText}"><Setter Property="ToolTip" Value="{Binding Destination}"/><Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/></Style></DataGridTextColumn.ElementStyle></DataGridTextColumn>
+        <DataGridTextColumn Header="Dimensione" SortMemberPath="Size" Binding="{Binding Size, Converter={StaticResource HistoryDisplay}, ConverterParameter=Size}" Width="96" ElementStyle="{StaticResource HistoryCellText}"/>
+        <DataGridTextColumn x:Name="HistoryConfigColumn" Header="TOML" SortMemberPath="ConfigPath" Binding="{Binding ConfigPath}" Width="180" Visibility="Collapsed"><DataGridTextColumn.ElementStyle><Style TargetType="TextBlock" BasedOn="{StaticResource HistoryCellText}"><Setter Property="ToolTip" Value="{Binding ConfigPath}"/></Style></DataGridTextColumn.ElementStyle></DataGridTextColumn>
+       </DataGrid.Columns>
+      </DataGrid>
+      <Expander x:Name="HistoryDetails" Grid.Row="1" Header="{Binding HistorySelectionSummary, StringFormat=Dettagli — {0}}" Margin="0,10,0,0">
+       <ScrollViewer MaxHeight="{Binding ActualHeight, ElementName=HistoryBody, Converter={StaticResource HistoryDisplay}, ConverterParameter=DetailHeight}" VerticalScrollBarVisibility="Auto"><StackPanel Margin="0,8,0,0" IsEnabled="{Binding HasHistorySelection}">
+        <DockPanel><Button DockPanel.Dock="Right" Content="Apri cartella destinazione" Command="{Binding OpenHistoryDestinationCommand}" Tag="{StaticResource IconFolder}"/><TextBlock Text="{Binding SelectedHistoryEntry.Source, Converter={StaticResource HistoryDisplay}, ConverterParameter=Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/></DockPanel>
+        <TextBlock Text="Dettagli del primo movimento selezionato. I percorsi completi sono selezionabili e copiabili." Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="96"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+         <TextBlock Text="Origine" VerticalAlignment="Center"/><TextBox Grid.Column="1" Text="{Binding SelectedHistoryEntry.Source, Mode=OneWay}" IsReadOnly="True" Margin="0,2,6,2" Padding="6,3"/><Button Grid.Column="2" Content="Copia" Command="{Binding CopyHistorySourceCommand}" Margin="0,2"/>
+         <TextBlock Grid.Row="1" Text="Destinazione" VerticalAlignment="Center"/><TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SelectedHistoryEntry.Destination, Mode=OneWay}" IsReadOnly="True" Margin="0,2,6,2" Padding="6,3"/><Button Grid.Row="1" Grid.Column="2" Content="Copia" Command="{Binding CopyHistoryDestinationCommand}" Margin="0,2"/>
+         <TextBlock Grid.Row="2" Text="TOML" VerticalAlignment="Center"/><TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SelectedHistoryEntry.ConfigPath, Mode=OneWay}" IsReadOnly="True" Margin="0,2,6,2" Padding="6,3"/><Button Grid.Row="2" Grid.Column="2" Content="Copia" Command="{Binding CopyHistoryConfigCommand}" Margin="0,2"/>
+        </Grid>
+       </StackPanel></ScrollViewer>
+      </Expander>
+     </Grid>
     </DockPanel>
    </TabItem>
    <TabItem Tag="General" IsEnabled="{Binding IsInteractive}"><TabItem.Header><StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE713;"/><TextBlock Text="Settings"/></StackPanel></TabItem.Header>

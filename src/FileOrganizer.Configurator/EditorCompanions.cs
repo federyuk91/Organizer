@@ -52,11 +52,11 @@ public sealed partial class EditorViewModel
     public ICommand CancelUndoCommand { get; private set; } = null!;
     public bool CanNavigate => !Busy || undoCancellation is not null;
     public void SelectHistory(IEnumerable<MoveRecord> selected)
-    { selectedHistoryIds = selected.Select(e => e.Id).ToArray(); CommandManager.InvalidateRequerySuggested(); }
+    { selectedHistoryIds = selected.Select(e => e.Id).Distinct().ToArray(); NotifyHistorySelection(); }
 
     private void InitializeCompanions(MoveHistory moves, EngineStateStore engineStates)
     {
-        history = moves; states = engineStates;
+        history = moves; states = engineStates; InitializeHistoryPresentation();
         RefreshHistoryCommand = new EditorCommand(async () => await RefreshHistoryAsync(), () => !Busy && (file is not null || showAllHistory));
         UndoHistoryCommand = new EditorCommand(async () => await UndoSelectedAsync(), () => !Busy && (file is not null || showAllHistory) && selectedHistoryIds.Length > 0);
         CheckSyncCommand = new EditorCommand(() => ScheduleExternalCheck(), () => !Busy);
@@ -164,9 +164,9 @@ public sealed partial class EditorViewModel
         try
         {
             string? path = showAllHistory ? null : file?.Path;
-            historyEntries = await Task.Run(() => history.Read(path)); selectedHistoryIds = [];
+            historyEntries = await Task.Run(() => history.Read(path)); HistoryEntriesChanged();
+            UndoSummary = ""; LastUndoIssues = []; Notify(nameof(UndoSummary)); Notify(nameof(LastUndoIssues));
             historyStatus = $"{historyEntries.Count} movements in the last seven days. Undo never overwrites an original path.";
-            Notify(nameof(HistoryEntries));
         }
         catch (Exception exception) when (Expected(exception)) { historyStatus = "History unavailable: " + exception.Message; }
         finally { Notify(nameof(HistoryStatus)); Busy = false; }
@@ -176,18 +176,22 @@ public sealed partial class EditorViewModel
         if (file is null && !showAllHistory || selectedHistoryIds.Length == 0) return;
         if (MessageBox.Show(owner, $"Undo {selectedHistoryIds.Length} selected movement(s)? The background engine will be stopped and remain stopped. Changed files and occupied original paths will be skipped.",
             "Undo movements", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        Dictionary<string, MoveRecord> original = historyEntries.ToDictionary(e => e.Id);
+        string[] requestedIds = selectedHistoryIds;
+        UndoSummary = "Ripristino in corso…"; LastUndoIssues = []; Notify(nameof(UndoSummary)); Notify(nameof(LastUndoIssues));
         undoCancellation = new();
         Busy = true;
         try
         {
-            string[] ids = selectedHistoryIds; string? path = showAllHistory ? null : file?.Path;
+            string[] ids = requestedIds; string? path = showAllHistory ? null : file?.Path;
             CancellationToken token = undoCancellation.Token;
             IReadOnlyList<UndoResult> results = await Task.Run(async () =>
             {
                 InstanceLease.RequestStop();
                 return await history.UndoAsync(ids, path, token);
             });
-            historyEntries = await Task.Run(() => history.Read(path)); Notify(nameof(HistoryEntries)); selectedHistoryIds = [];
+            SetUndoOutcome(results, original);
+            historyEntries = await Task.Run(() => history.Read(path)); HistoryEntriesChanged();
             historyStatus = $"Restored: {results.Count(r => r.Success)}. Skipped: {results.Count(r => !r.Success)}. Engine remains stopped.\n" +
                 string.Join("\n", results.Where(r => !r.Success).Take(8).Select(r => r.Id + ": " + r.Message));
             await RefreshDiskAndRuntimeAsync();
@@ -195,11 +199,17 @@ public sealed partial class EditorViewModel
         catch (OperationCanceledException)
         {
             historyStatus = "Undo cancelled. Completed restores are retained; the engine remains stopped.";
-            try { historyEntries = await Task.Run(() => history.Read(showAllHistory ? null : file?.Path)); Notify(nameof(HistoryEntries)); }
+            try
+            {
+                historyEntries = await Task.Run(() => history.Read(showAllHistory ? null : file?.Path)); HistoryEntriesChanged();
+                int restored = historyEntries.Count(e => requestedIds.Contains(e.Id) && e.State == "Undone" && original.TryGetValue(e.Id, out MoveRecord? previous) && previous.State != "Undone");
+                UndoSummary = $"Ripristino interrotto. Ripristinati e registrati: {restored}. Gli altri selezionati potrebbero non essere stati elaborati. Il motore resta arrestato.";
+                Notify(nameof(UndoSummary));
+            }
             catch (Exception exception) when (Expected(exception)) { historyStatus += " History unavailable: " + exception.Message; }
         }
         catch (Exception exception) when (Expected(exception)) { historyStatus = "Undo stopped safely: " + exception.Message; }
-        finally { undoCancellation.Dispose(); undoCancellation = null; Notify(nameof(HistoryStatus)); Busy = false; }
+        finally { if (UndoSummary == "Ripristino in corso…") { UndoSummary = historyStatus; Notify(nameof(UndoSummary)); } undoCancellation.Dispose(); undoCancellation = null; Notify(nameof(HistoryStatus)); Busy = false; }
     }
     private void DisposeCompanions()
     { owner.Activated -= OnActivated; historyWatcher?.Dispose(); stateWatcher?.Dispose(); observedWorker?.Dispose(); undoCancellation?.Cancel(); }

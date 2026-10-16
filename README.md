@@ -17,7 +17,7 @@ Organizza automaticamente i file su **Windows 10/11 x64**, con regole ordinate e
 - Avvio con Windows per l’utente corrente, configurabile dalla GUI senza amministratore.
 - Monitoraggio a eventi, coda limitata e nessuna scansione periodica durante il funzionamento normale.
 
-La versione **1.3.3** aggiorna la Modern con selettori blu nei Managed paths e comandi compatti per cartelle e regole; la Classic rimane disponibile.
+La versione **1.3.4** introduce la nuova History nella Modern, con ricerca, filtri, stati colorati e dettagli espandibili, e una legenda più leggibile per i Managed paths. La Classic rimane disponibile.
 
 ## Installazione
 
@@ -151,6 +151,12 @@ Puoi aggiungere, eliminare, duplicare, abilitare/disabilitare e riordinare carte
 
 Scorciatoie: `Ctrl+S` salva, `Ctrl+O` apre, `Ctrl+N` crea. Salvare con un nuovo nome non trasferisce una registrazione di avvio del vecchio TOML. Il toggle autorun non indica se il processo è attualmente in esecuzione.
 
+### Cronologia nella Modern
+
+La scheda **History** mostra prima gli spostamenti più recenti, con nome del file, data e ora locali in formato italiano, dimensioni leggibili e cartelle di origine/destinazione abbreviate. Il verde indica **Spostato**, il blu **Ripristinato**, l’ambra uno stato da verificare; icone e testo distinguono gli stati anche senza colori. I percorsi completi sono disponibili nei tooltip e nei dettagli espandibili, con comandi per copiarli o aprire la cartella di destinazione.
+
+Ricerca, periodo, stato e cartella filtrano solo la cronologia già caricata. **Aggiorna** rilegge il registro; non vengono interrogati continuamente i file. La colonna TOML appare con **Tutte le configurazioni**. Una riga nascosta dai filtri viene rimossa dalla selezione di ripristino. I dettagli mostrano il primo movimento selezionato; il conteggio indica quanti saranno inviati al ripristino. Dopo l’operazione compaiono il riepilogo dei ripristinati/saltati e i motivi dei salti. L’identità e il contenuto dei file vengono verificati solo all’esecuzione del ripristino.
+
 ### Impostazioni generali e valori predefiniti
 
 | Campo TOML | Default del parser | Effetto |
@@ -181,10 +187,10 @@ Requisiti di sviluppo: Windows x64 e .NET 10 SDK (versione in [global.json](glob
 
 ```powershell
 ./scripts/build.ps1
-./scripts/build-installer.ps1 -Version 1.3.3
+./scripts/build-installer.ps1 -Version 1.3.4
 
 # Fallback senza toolchain C++:
-./scripts/build-installer.ps1 -Version 1.3.3 -EngineMode Standard
+./scripts/build-installer.ps1 -Version 1.3.4 -EngineMode Standard
 
 # Compilatore Inno in un percorso diverso:
 ./scripts/build-installer.ps1 -CompilerPath "C:\tools\Inno Setup 6\ISCC.exe"
@@ -207,7 +213,7 @@ Output in `artifacts/publish/`. Per AOT basta `FileOrganizer.exe`; per motore st
 
 `scripts/build.ps1` compila l’intera soluzione ed esegue i test; `-EngineOnly` esclude WPF. Per includere il test fisico tra volumi, imposta `FILEORGANIZER_TEST_SECOND_VOLUME` su un percorso temporaneo scrivibile in un altro disco. Il test crea e rimuove solo una propria sottocartella univoca. In assenza di questa variabile quel test viene saltato; i test non usano le vere cartelle Download o Desktop.
 
-Verifica del 16 ottobre 2026, Windows x64/.NET SDK 10.0.401: **180 test superati** (131 core/integrazione, 49 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Avvio effettivo al login Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
+Verifica del 16 ottobre 2026, Windows x64/.NET SDK 10.0.401: **186 test superati** (131 core/integrazione, 55 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Avvio effettivo al login Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
 
 Il setup è stato verificato con installazione per utente senza amministratore, collegamenti, motore installato, simulazione, avvio/chiusura GUI, reinstallazione senza perdita del TOML, disinstallazione e rimozione selettiva dell’autorun. Puoi ripetere la prova con `./scripts/verify-installer.ps1`: usa una cartella sotto `artifacts/installer`, crea temporaneamente proprie voci HKCU e le pulisce alla fine. Richiede un account senza installazioni o collegamenti File Organizer preesistenti, per non interferire con l’uso reale. I log restano negli artefatti di verifica.
 
