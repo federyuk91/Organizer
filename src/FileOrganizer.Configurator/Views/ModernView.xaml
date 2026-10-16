@@ -1,0 +1,199 @@
+<local:EditorSurface x:Class="FileOrganizer.Configurator.Views.ModernView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="clr-namespace:FileOrganizer.Configurator" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13" UseLayoutRounding="True"
+ Background="{DynamicResource CanvasBrush}" Foreground="{DynamicResource TextBrush}">
+ <local:EditorSurface.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="ModernStyles.xaml"/></ResourceDictionary.MergedDictionaries></ResourceDictionary></local:EditorSurface.Resources>
+ <DockPanel>
+  <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceBrush}" Padding="16,12,10,8" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1">
+   <StackPanel>
+    <WrapPanel>
+     <Button Command="{Binding NewCommand}" Style="{StaticResource PrimaryButton}"><StackPanel Orientation="Horizontal"><Path Data="{StaticResource IconNew}" Stroke="{DynamicResource AccentTextBrush}" StrokeThickness="1.4" Width="13" Height="13" Stretch="Uniform" Margin="0,0,8,0"/><TextBlock Text="New"/></StackPanel></Button>
+     <Button Content="Save" Command="{Binding SaveCommand}" Tag="{StaticResource IconSave}"/>
+     <Button Content="Save As…" Command="{Binding SaveAsCommand}" Tag="{StaticResource IconSaveAs}"/>
+     <Button Content="Reload" Command="{Binding ReloadCommand}" Tag="{StaticResource IconRefresh}"/>
+     <Button Content="Validate" Command="{Binding ValidateCommand}" Tag="{StaticResource IconCheck}"/>
+    </WrapPanel>
+    <Border Padding="10,7" Margin="0,4,0,6" CornerRadius="5" BorderThickness="1" MaxHeight="110" AutomationProperties.LiveSetting="Polite">
+     <Border.Style><Style TargetType="Border">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}"/>
+      <Style.Triggers>
+       <DataTrigger Binding="{Binding ActionFeedback}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+       <DataTrigger Binding="{Binding ActionFeedbackState}" Value="{x:Static local:EditorFeedbackState.Success}"><Setter Property="BorderBrush" Value="{DynamicResource SuccessBrush}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource SuccessBrush}"/></DataTrigger>
+       <DataTrigger Binding="{Binding ActionFeedbackState}" Value="{x:Static local:EditorFeedbackState.Error}"><Setter Property="BorderBrush" Value="{DynamicResource ErrorBrush}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource ErrorBrush}"/></DataTrigger>
+      </Style.Triggers>
+     </Style></Border.Style>
+     <ScrollViewer VerticalScrollBarVisibility="Auto"><TextBlock Text="{Binding ActionFeedback}" TextWrapping="Wrap" FontWeight="SemiBold"/></ScrollViewer>
+    </Border>
+    <DockPanel Margin="0,3,0,0">
+     <Button DockPanel.Dock="Right" Content="Open…" Command="{Binding OpenCommand}" Tag="{StaticResource IconFolder}" Margin="8,0,0,0" ToolTip="Open a configuration. Starts in the current configuration folder."/>
+     <TextBox Text="{Binding ConfigPath, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" Padding="0" Margin="0" MinHeight="24" FontSize="12" VerticalAlignment="Center"/>
+    </DockPanel>
+    <DockPanel Margin="0,6,0,0">
+     <ContentControl DockPanel.Dock="Left" Style="{StaticResource StatusIndicator}" Tag="{Binding IsFormSynchronized}"/>
+     <TextBlock Text="{Binding SyncMessage}" TextWrapping="Wrap" FontWeight="SemiBold"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource ErrorBrush}"/><Style.Triggers><DataTrigger Binding="{Binding IsFormSynchronized}" Value="True"><Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+    </DockPanel>
+    <TextBlock Text="{Binding ExternalMessage}" Foreground="DarkRed" TextWrapping="Wrap"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+    <DockPanel Margin="0,4,0,0">
+     <ContentControl DockPanel.Dock="Left" Style="{StaticResource StatusIndicator}" Tag="{Binding IsEngineSynchronized}"/>
+     <TextBlock Text="{Binding EngineStatusMessage}" TextWrapping="Wrap"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource ErrorBrush}"/><Style.Triggers><DataTrigger Binding="{Binding IsEngineSynchronized}" Value="True"><Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+    </DockPanel>
+    <Expander Header="File and engine status" Margin="0,5,0,0">
+     <StackPanel Margin="0,8,0,0"><ScrollViewer MaxHeight="130" VerticalScrollBarVisibility="Auto"><StackPanel Grid.IsSharedSizeScope="True"><ItemsControl ItemsSource="{Binding SavedStatusRows}" ItemTemplate="{StaticResource StatusRow}"/><ItemsControl ItemsSource="{Binding RuntimeStatusRows}" ItemTemplate="{StaticResource StatusRow}" Margin="0,6"/></StackPanel></ScrollViewer><WrapPanel><Button Content="Verify state" Command="{Binding CheckSyncCommand}" Tag="{StaticResource IconShield}"/><Button Content="Open engine's TOML" Command="{Binding OpenEngineConfigCommand}" Tag="{StaticResource IconNew}"/></WrapPanel></StackPanel>
+    </Expander>
+   </StackPanel>
+  </Border>
+  <Border DockPanel.Dock="Bottom" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="16,7">
+   <DockPanel>
+    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
+     <Button Content="Avvia scansione" Command="{Binding StartScanCommand}" Tag="{StaticResource IconPlay}" ToolTip="A motore fermo. Chiede di salvare la bozza prima di avviare." Margin="0,0,6,0"/>
+     <Button Content="Arresta scansione" Command="{Binding StopScanCommand}" Tag="{StaticResource IconStop}" Margin="0"/>
+    </StackPanel>
+    <Path Data="{StaticResource IconInfo}" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.4" Width="13" Height="13" Stretch="Uniform" Margin="0,0,8,0" DockPanel.Dock="Left"/><TextBox Text="{Binding Status, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0" Margin="0" MinHeight="26" MaxHeight="88" VerticalScrollBarVisibility="Auto"/></DockPanel>
+  </Border>
+  <TabControl x:Name="MainTabs" TabStripPlacement="Left" SelectionChanged="OnTabChanged" IsEnabled="{Binding CanNavigate}" Style="{StaticResource Navigation}">
+<TabItem Tag="Folders" IsEnabled="{Binding IsInteractive}">
+ <TabItem.Header><StackPanel Orientation="Horizontal"><Path Data="{StaticResource IconFolder}" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.4" Width="13" Height="13" Stretch="Uniform" Margin="0,0,8,0"/><TextBlock Text="Folders &amp; rules"/></StackPanel></TabItem.Header>
+ <Grid IsEnabled="{Binding CanEditForm}">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+  <Border Style="{StaticResource Card}" Margin="0,0,0,12" IsEnabled="{Binding HasFolder}">
+   <StackPanel>
+    <DockPanel Margin="0,0,0,8"><WrapPanel DockPanel.Dock="Right"><CheckBox Content="Manage subfolder" IsChecked="{Binding ManageSubfolders, Mode=OneWay}" Click="OnManageSubfoldersClick" Margin="0" ToolTip="Attiva tutti i sottopercorsi della cartella selezionata, inclusi quelli futuri. Dopo conferma sostituisce le selezioni e le esclusioni di questo ramo nei Managed paths. Per un controllo più preciso usa Managed paths. Salva per applicare."/></WrapPanel><TextBlock Text="Folder — draft until Save" FontWeight="SemiBold" FontSize="16"/></DockPanel>
+    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="5*"/></Grid.ColumnDefinitions>
+     <StackPanel><TextBlock Text="Name"/><TextBox Text="{Binding SelectedFolder.Fields[name].Text, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+     <StackPanel Grid.Column="2"><TextBlock Text="Source path"/><DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseSourceCommand}" Tag="{StaticResource IconFolder}" Margin="6,3,0,10"/><TextBox Text="{Binding SelectedFolder.Fields[path].Text, UpdateSourceTrigger=PropertyChanged}"/></DockPanel></StackPanel>
+    </Grid>
+    <Expander Header="Duplicate handling and resolved paths">
+     <StackPanel Margin="0,10,0,0">
+      <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
+       <StackPanel><TextBlock Text="Same name, different content"/><ComboBox ItemsSource="{x:Static local:EditorViewModel.NamePolicies}" SelectedItem="{Binding SelectedFolder.Fields[duplicates.name_collision].Text}"/></StackPanel>
+       <StackPanel Grid.Column="2"><TextBlock Text="Identical content"/><ComboBox ItemsSource="{x:Static local:EditorViewModel.ContentPolicies}" SelectedItem="{Binding SelectedFolder.Fields[duplicates.identical_content].Text}"/></StackPanel>
+       <StackPanel Grid.Column="4"><TextBlock Text="Copy suffix ({n})"/><TextBox Text="{Binding SelectedFolder.Fields[duplicates.copy_suffix].Text, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+      </Grid>
+      <TextBlock Text="delete permanently removes a verified identical original; History cannot undo duplicate deletion." TextWrapping="Wrap" Foreground="DarkRed"/>
+      <TextBlock Text="{Binding ResolvedPaths}" Style="{StaticResource Hint}"/>
+     </StackPanel>
+    </Expander>
+   </StackPanel>
+  </Border>
+  <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="10"/><ColumnDefinition Width="190"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+   <Border Style="{StaticResource Card}" Padding="10">
+    <DockPanel>
+     <StackPanel DockPanel.Dock="Top"><TextBlock Text="Monitored folders" Style="{StaticResource Heading}"/><WrapPanel><Button Content="Add" Command="{Binding AddFolderCommand}" Tag="{StaticResource IconAdd}" Style="{StaticResource SmallButton}"/><Button Content="Remove" Command="{Binding RemoveFolderCommand}" Tag="{StaticResource IconRemove}" Style="{StaticResource SmallButton}"/></WrapPanel><WrapPanel><Button Content="Up" Command="{Binding FolderUpCommand}" Tag="{StaticResource IconUp}" Style="{StaticResource SmallButton}"/><Button Content="Down" Command="{Binding FolderDownCommand}" Tag="{StaticResource IconDown}" Style="{StaticResource SmallButton}"/></WrapPanel></StackPanel>
+     <ListBox ItemsSource="{Binding Folders}" SelectedItem="{Binding SelectedFolder}" BorderThickness="0"><ListBox.ItemTemplate><DataTemplate><DockPanel><CheckBox IsChecked="{Binding Fields[enabled].Flag}" Margin="0,0,6,0"/><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/></DockPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
+    </DockPanel>
+   </Border>
+   <Border Grid.Column="2" Style="{StaticResource Card}" Padding="10" IsEnabled="{Binding HasFolder}">
+    <DockPanel>
+     <StackPanel DockPanel.Dock="Top">
+      <TextBlock Text="Rules" Style="{StaticResource Heading}"/>
+      <ComboBox ItemsSource="{x:Static local:EditorViewModel.RulePresets}" SelectedItem="{Binding SelectedRulePreset}" DisplayMemberPath="Name" AutomationProperties.Name="Rule template"><ComboBox.ToolTip><TextBlock Text="{Binding SelectedRulePreset.Description}" MaxWidth="440" TextWrapping="Wrap"/></ComboBox.ToolTip></ComboBox>
+      <WrapPanel><Button Content="Add" Command="{Binding AddRuleCommand}" Tag="{StaticResource IconAdd}" Style="{StaticResource SmallButton}"/><Button Content="Duplicate" Command="{Binding DuplicateRuleCommand}" Tag="{StaticResource IconDuplicate}" Style="{StaticResource SmallButton}"/><Button Content="Remove" Command="{Binding RemoveRuleCommand}" Tag="{StaticResource IconRemove}" Style="{StaticResource SmallButton}"/></WrapPanel>
+      <WrapPanel><Button Content="Up" Command="{Binding RuleUpCommand}" Tag="{StaticResource IconUp}" Style="{StaticResource SmallButton}"/><Button Content="Down" Command="{Binding RuleDownCommand}" Tag="{StaticResource IconDown}" Style="{StaticResource SmallButton}"/></WrapPanel>
+      <TextBlock Text="First matching rule wins." Style="{StaticResource Hint}"/>
+     </StackPanel>
+     <ListBox ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}" BorderThickness="0"><ListBox.ItemTemplate><DataTemplate><DockPanel><CheckBox IsChecked="{Binding Fields[enabled].Flag}" Margin="0,0,6,0"/><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/></DockPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
+    </DockPanel>
+   </Border>
+   <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto">
+    <StackPanel>
+     <Border Style="{StaticResource Card}" IsEnabled="{Binding HasRule}" Margin="0,0,0,12">
+      <StackPanel>
+       <TextBlock Text="Rule details" Style="{StaticResource Heading}"/>
+       <TextBlock Text="Name"/><TextBox Text="{Binding SelectedRule.Fields[name].Text, UpdateSourceTrigger=PropertyChanged}"/>
+       <WrapPanel><CheckBox Content="Enabled" IsChecked="{Binding SelectedRule.Fields[enabled].Flag}"/><CheckBox Content="Case sensitive" IsChecked="{Binding SelectedRule.Fields[case_sensitive].Flag}"/></WrapPanel>
+       <TextBlock Text="Destination"/><DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseDestinationCommand}" Tag="{StaticResource IconFolder}" Margin="6,3,0,10"/><TextBox Text="{Binding SelectedRule.Fields[destination].Text, UpdateSourceTrigger=PropertyChanged}"/></DockPanel>
+       <TextBlock Text="Absolute path or relative to this source. Environment variables are supported." Style="{StaticResource Hint}"/>
+       <TextBlock Text="Extensions — one per line"/><TextBox Text="{Binding SelectedRule.Fields[extensions].Text, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Height="82"/>
+       <TextBlock Text="Glob patterns — one per line"/><TextBox Text="{Binding SelectedRule.Fields[patterns].Text, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Height="82"/>
+       <TextBlock Text="Exclusions — one per line"/><TextBox Text="{Binding SelectedRule.Fields[exclude_patterns].Text, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Height="82"/>
+       <TextBlock Text="Extensions AND patterns; OR within each list. Exclusions veto a match. * = any characters; ? = one character." Style="{StaticResource Hint}"/>
+      </StackPanel>
+     </Border>
+     <GroupBox Header="Filename preview" IsEnabled="{Binding HasFolder}"><StackPanel><TextBox Text="{Binding PreviewName, UpdateSourceTrigger=PropertyChanged}"/><Button Content="Preview" Command="{Binding PreviewCommand}" Tag="{StaticResource IconSearch}" HorizontalAlignment="Left"/><TextBlock Text="{Binding PreviewResult}" TextWrapping="Wrap"/></StackPanel></GroupBox>
+    </StackPanel>
+   </ScrollViewer>
+  </Grid>
+ </Grid>
+</TabItem>
+   <TabItem Tag="Paths" IsEnabled="{Binding IsInteractive}"><TabItem.Header><StackPanel Orientation="Horizontal"><Path Data="{StaticResource IconPaths}" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.4" Width="13" Height="13" Stretch="Uniform" Margin="0,0,8,0"/><TextBlock Text="Managed paths"/></StackPanel></TabItem.Header>
+    <DockPanel Margin="10" IsEnabled="{Binding IsInteractive}">
+     <StackPanel DockPanel.Dock="Top">
+      <TextBlock Text="□ Excluded (gray; children hidden)     ■ Partially included branch     ✓ Complete branch / no subfolders" TextWrapping="Wrap" FontWeight="SemiBold"/>
+      <TextBlock Text="Left: □ → ■ → ✓ → □. Right: □ → ✓ → ■ → □. Without subfolders: □ ↔ ✓ with either click. Each path appears once; configured paths are connected automatically. A square includes direct files and selected child branches; a check means all current children are complete. Save to apply. Disabled monitors must first be enabled in Folders and rules." TextWrapping="Wrap" Margin="0,5"/>
+      <WrapPanel><ComboBox ItemsSource="{x:Static local:EditorViewModel.PathViews}" SelectedItem="{Binding PathView}" Width="160"/><Button Content="Load / refresh paths" Command="{Binding LoadPathsCommand}" Tag="{StaticResource IconRefresh}"/></WrapPanel>
+      <TextBlock Text="{Binding TreeStatus}" TextWrapping="Wrap" Margin="0,4,0,8"/>
+     </StackPanel>
+     <TreeView ItemsSource="{Binding PathRoots}" Tag="{Binding CanEditTree}" TreeViewItem.Expanded="OnPathExpanded" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+      <TreeView.Resources><Style TargetType="TreeViewItem"><Setter Property="IsExpanded" Value="{Binding Expanded, Mode=TwoWay}"/><Style.Triggers><DataTrigger Binding="{Binding IsOff}" Value="True"><Setter Property="Foreground" Value="Gray"/></DataTrigger></Style.Triggers></Style></TreeView.Resources>
+      <TreeView.ItemTemplate>
+       <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+        <StackPanel Orientation="Horizontal" ToolTip="{Binding Description}">
+         <Button Content="{Binding Symbol}" Width="32" Padding="2" Margin="0,1,6,1" FontSize="16" Click="OnPathLeftClick" PreviewMouseRightButtonUp="OnPathRightClick" AutomationProperties.Name="{Binding Label}">
+          <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="IsEnabled" Value="{Binding CanCycle}"/><Style.Triggers><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=TreeView}}" Value="False"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></Button.Style>
+         </Button>
+         <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+        </StackPanel>
+       </HierarchicalDataTemplate>
+      </TreeView.ItemTemplate>
+     </TreeView>
+    </DockPanel>
+   </TabItem>
+   <TabItem Tag="History"><TabItem.Header><StackPanel Orientation="Horizontal"><Path Data="{StaticResource IconHistory}" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.4" Width="13" Height="13" Stretch="Uniform" Margin="0,0,8,0"/><TextBlock Text="History"/></StackPanel></TabItem.Header>
+    <DockPanel Margin="10">
+     <StackPanel DockPanel.Dock="Top">
+      <TextBlock Text="Recorded moves from the last seven days for the open TOML. Undo checks identity and content, never overwrites files, and leaves the engine stopped. Older moves and duplicate deletions cannot be undone here." TextWrapping="Wrap"/>
+      <CheckBox Content="Show all configurations (including renamed or deleted TOML files)" IsChecked="{Binding ShowAllHistory}" IsEnabled="{Binding IsInteractive}" Margin="0,6"/>
+      <WrapPanel><Button Content="Refresh history" Command="{Binding RefreshHistoryCommand}" Tag="{StaticResource IconRefresh}"/><Button Content="Undo selected" Command="{Binding UndoHistoryCommand}" Tag="{StaticResource IconUndo}"/><Button Content="Cancel undo" Command="{Binding CancelUndoCommand}" Tag="{StaticResource IconCancel}"/><Button Content="Stop engine safely" Command="{Binding StopWorkerCommand}" Tag="{StaticResource IconStop}"/></WrapPanel>
+      <TextBlock Text="{Binding HistoryStatus}" TextWrapping="Wrap" Margin="0,5"/>
+     </StackPanel>
+     <DataGrid x:Name="HistoryGrid" IsEnabled="{Binding IsInteractive}" ItemsSource="{Binding HistoryEntries}" IsReadOnly="True" AutoGenerateColumns="False" SelectionMode="Extended" SelectionUnit="FullRow" SelectionChanged="OnHistorySelectionChanged" EnableRowVirtualization="True" EnableColumnVirtualization="True">
+      <DataGrid.Columns>
+       <DataGridTextColumn Header="Time" Binding="{Binding Time}" Width="150"/>
+       <DataGridTextColumn Header="State" Binding="{Binding State}" Width="100"/>
+       <DataGridTextColumn Header="Original path" Binding="{Binding Source}" Width="*"/>
+       <DataGridTextColumn Header="Destination" Binding="{Binding Destination}" Width="*"/>
+       <DataGridTextColumn Header="Bytes" Binding="{Binding Size}" Width="90"/>
+       <DataGridTextColumn Header="TOML" Binding="{Binding ConfigPath}" Width="160"/>
+      </DataGrid.Columns>
+     </DataGrid>
+    </DockPanel>
+   </TabItem>
+   <TabItem Tag="General" IsEnabled="{Binding IsInteractive}"><TabItem.Header><StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE713;"/><TextBlock Text="Settings"/></StackPanel></TabItem.Header>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12" IsEnabled="{Binding IsInteractive}">
+     <StackPanel>
+      <GroupBox Header="General settings" IsEnabled="{Binding CanEditForm}">
+       <StackPanel>
+        <WrapPanel><CheckBox Content="Scan on engine startup" IsChecked="{Binding Document.General.Fields[scan_on_startup].Flag}"/><CheckBox Content="Watch configuration changes" IsChecked="{Binding Document.General.Fields[watch_config_changes].Flag}"/><CheckBox Content="Dry run (no file moves)" IsChecked="{Binding Document.General.Fields[dry_run].Flag}"/></WrapPanel>
+        <Grid>
+         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+         <StackPanel><TextBlock Text="Log level"/><ComboBox ItemsSource="{x:Static local:EditorViewModel.LogLevels}" SelectedItem="{Binding Document.General.Fields[log_level].Text}"/></StackPanel>
+         <StackPanel Grid.Column="2"><TextBlock Text="Readiness timeout (1–86400 seconds)"/><TextBox Text="{Binding Document.General.Fields[file_ready_timeout_seconds].Text, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+         <StackPanel Grid.Column="4"><TextBlock Text="Maximum parallel moves (1–16)"/><TextBox Text="{Binding Document.General.Fields[max_parallel_moves].Text, UpdateSourceTrigger=PropertyChanged}"/></StackPanel>
+        </Grid>
+        <TextBlock Text="Saving can cause a running engine to reload and reconcile immediately. With configuration watching disabled, restart the engine to apply changes." TextWrapping="Wrap" Foreground="DimGray"/>
+       </StackPanel>
+      </GroupBox>
+      <GroupBox Header="Background engine at Windows login">
+       <StackPanel>
+        <TextBlock Text="Published engine executable (FileOrganizer.exe)"/>
+        <DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseEngineCommand}" Tag="{StaticResource IconFolder}" Margin="6,2,0,7"/><TextBox Text="{Binding EnginePath, UpdateSourceTrigger=LostFocus}"/></DockPanel>
+        <WrapPanel><CheckBox x:Name="StartupToggle" Content="Start with Windows" IsChecked="{Binding StartWithWindows, Mode=OneWay}" IsThreeState="True" IsEnabled="{Binding CanManageStartup}" Click="OnStartupClick"/><Button Content="Refresh status" Command="{Binding RefreshStartupCommand}" Tag="{StaticResource IconRefresh}"/></WrapPanel>
+        <TextBox Text="{Binding StartupMessage, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0"/>
+        <TextBlock Text="This changes the selected configuration's actual HKCU autorun entry for the engine. It does not launch or register the GUI. A shaded toggle indicates a mismatched or unreadable entry; see the status above. Windows policy or Task Manager may independently prevent login startup." TextWrapping="Wrap" Foreground="DimGray"/>
+       </StackPanel>
+      </GroupBox>
+     </StackPanel>
+    </ScrollViewer>
+   </TabItem>
+   <TabItem Tag="Toml" IsEnabled="{Binding IsInteractive}"><TabItem.Header><StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE943;"/><TextBlock Text="TOML"/></StackPanel></TabItem.Header>
+    <DockPanel Margin="10" IsEnabled="{Binding IsInteractive}">
+     <StackPanel DockPanel.Dock="Top">
+      <TextBlock Text="Original properties, comments and raw paths are preserved. Apply TOML updates the form; Save performs engine validation. Unsupported properties remain visible and are never discarded." TextWrapping="Wrap" Margin="0,0,0,8"/>
+      <WrapPanel><Button Content="Open" Command="{Binding OpenCurrentTomlCommand}" Tag="{StaticResource IconNew}" ToolTip="Open the saved TOML in its associated application. Unsaved edits remain in this editor."/><Button Content="Apply TOML to form" Command="{Binding ApplyRawCommand}" Tag="{StaticResource IconCheck}"/><Button Content="Refresh from form / discard unapplied text" Command="{Binding RefreshRawCommand}" Tag="{StaticResource IconRefresh}"/></WrapPanel>
+     </StackPanel>
+     <TextBox x:Name="TomlEditor" Text="{Binding RawText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AcceptsTab="True" FontFamily="Consolas" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap"/>
+    </DockPanel>
+   </TabItem>
+  </TabControl>
+ </DockPanel>
+</local:EditorSurface>

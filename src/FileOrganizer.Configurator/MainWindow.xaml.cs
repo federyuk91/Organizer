@@ -1,7 +1,9 @@
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
+using System.Windows.Automation;
+using System.Windows.Media;
+using FileOrganizer.Configurator.Views;
 
 namespace FileOrganizer.Configurator;
 
@@ -9,38 +11,67 @@ public partial class MainWindow : Window
 {
     private readonly EditorViewModel editor;
     private readonly string? initialPath;
-    public MainWindow(string? configPath = null, FileOrganizer.Windows.MoveHistory? history = null, FileOrganizer.Windows.EngineStateStore? states = null)
+    private readonly InterfacePreferenceStore preferences;
+    private readonly Dictionary<EditorInterface, EditorSurface> surfaces = [];
+    private bool switching, initialized;
+    public EditorInterface ActiveInterface { get; private set; }
+    public EditorSurface ActiveSurface => (EditorSurface)SurfaceHost.Content;
+    public MainWindow(string? configPath = null, FileOrganizer.Windows.MoveHistory? history = null,
+        FileOrganizer.Windows.EngineStateStore? states = null, InterfacePreferenceStore? preferences = null)
     {
         InitializeComponent(); initialPath = configPath;
+        this.preferences = preferences ?? new InterfacePreferenceStore(InterfacePreferenceStore.DefaultPath);
+        ActiveInterface = this.preferences.Read(out string? warning); PreferenceWarning.Text = warning ?? "";
         editor = new EditorViewModel(this, history: history, states: states); DataContext = editor;
+        EditorSurface surface = GetSurface(ActiveInterface); SurfaceHost.Content = surface; surface.InitializeModel(editor);
+        surface.ClearValue(DataContextProperty);
+        UpdateInterfaceLabel();
     }
-    private async void OnLoaded(object sender, RoutedEventArgs e) => await editor.InitializeAsync(initialPath);
+    private EditorSurface GetSurface(EditorInterface mode)
+    {
+        if (!surfaces.TryGetValue(mode, out EditorSurface? surface))
+        { surface = mode == EditorInterface.Modern ? new ModernView() : new ClassicView(); surfaces.Add(mode, surface); }
+        return surface;
+    }
+    private void UpdateInterfaceLabel()
+    {
+        InterfaceLabel.Text = ActiveInterface.ToString();
+        InterfaceIcon.Source = (ImageSource)FindResource(ActiveInterface == EditorInterface.Classic ? "ClassicInterfaceIcon" : "ModernInterfaceIcon");
+        string tooltip = ActiveInterface == EditorInterface.Classic ? "Interfaccia Classic — passa a Modern" : "Interfaccia Modern — passa a Classic";
+        InterfaceSwitch.ToolTip = tooltip;
+        AutomationProperties.SetName(InterfaceSwitch, tooltip);
+    }
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    { if (!initialized) { initialized = true; await editor.InitializeAsync(initialPath); } }
+    private async void OnInterfaceSwitch(object sender, RoutedEventArgs e) => await SwitchInterfaceAsync();
+    public async Task SwitchInterfaceAsync()
+    {
+        if (switching) return;
+        switching = true; InterfaceSwitch.IsEnabled = false;
+        try
+        {
+            EditorViewModel model = (EditorViewModel)DataContext;
+            EditorSurface previous = ActiveSurface;
+            EditorPage page = previous.SelectedPage;
+            (int caret, int length) = previous.CaptureRawSelection();
+            FileOrganizer.Core.ConfigurationDocument? document = model.Document;
+            FileOrganizer.Core.ConfigurationSection? folder = model.SelectedFolder, rule = model.SelectedRule;
+            previous.DetachModel();
+            ActiveInterface = ActiveInterface == EditorInterface.Classic ? EditorInterface.Modern : EditorInterface.Classic;
+            EditorSurface next = GetSurface(ActiveInterface); SurfaceHost.Content = next;
+            await next.AttachModelAsync(model, page, caret, length);
+            if (ReferenceEquals(document, model.Document)) { model.SelectedFolder = folder; model.SelectedRule = rule; }
+            UpdateInterfaceLabel();
+            EditorInterface selected = ActiveInterface;
+            try { await Task.Run(() => preferences.Save(selected)); PreferenceWarning.Text = ""; }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            { PreferenceWarning.Text = "Interfaccia cambiata; preferenza non salvata: " + exception.Message; }
+        }
+        finally { switching = false; InterfaceSwitch.IsEnabled = true; }
+    }
     private void OnClosing(object? sender, CancelEventArgs e)
     {
-        if (editor.Busy || !editor.ConfirmDiscard()) { e.Cancel = true; return; }
+        if (switching || editor.Busy || !editor.ConfirmDiscard()) { e.Cancel = true; return; }
         editor.Dispose();
     }
-    private async void OnStartupClick(object sender, RoutedEventArgs e) => await editor.ChangeStartupAsync(StartupToggle.IsChecked == true);
-    private void OnTabChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (e.OriginalSource == sender && sender is TabControl tabs && tabs.SelectedItem is TabItem { Header: "TOML" } && DataContext is EditorViewModel model)
-            model.PrepareRaw();
-        if (e.OriginalSource == sender && sender is TabControl historyTabs && historyTabs.SelectedItem is TabItem { Header: "History" } && editor.RefreshHistoryCommand.CanExecute(null))
-            editor.RefreshHistoryCommand.Execute(null);
-        if (e.OriginalSource == sender && sender is TabControl pathTabs && pathTabs.SelectedItem is TabItem { Header: "Managed paths" } && editor.LoadPathsCommand.CanExecute(null))
-            editor.LoadPathsCommand.Execute(null);
-    }
-    private async void OnPathExpanded(object sender, RoutedEventArgs e)
-    { if (e.OriginalSource is TreeViewItem { DataContext: PathTreeNode node }) await node.LoadChildrenAsync(); }
-    private async void OnPathLeftClick(object sender, RoutedEventArgs e) => await CyclePathAsync(sender, false);
-    private async void OnPathRightClick(object sender, MouseButtonEventArgs e)
-    { e.Handled = true; await CyclePathAsync(sender, true); }
-    private async Task CyclePathAsync(object sender, bool reverse)
-    {
-        try { if (sender is FrameworkElement { DataContext: PathTreeNode node }) await editor.CyclePathAsync(node, reverse); }
-        catch (Exception exception) when (exception is FileOrganizer.Core.ConfigException or System.IO.IOException or UnauthorizedAccessException)
-        { MessageBox.Show(this, exception.Message, "Path selection", MessageBoxButton.OK, MessageBoxImage.Warning); }
-    }
-    private void OnHistorySelectionChanged(object sender, SelectionChangedEventArgs e)
-    { if (sender is DataGrid grid) editor.SelectHistory(grid.SelectedItems.Cast<FileOrganizer.Windows.MoveRecord>()); }
 }

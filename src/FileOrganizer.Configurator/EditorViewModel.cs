@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -10,6 +11,8 @@ using FileOrganizer.Windows;
 using Microsoft.Win32;
 
 namespace FileOrganizer.Configurator;
+
+public enum EditorFeedbackState { None, Running, Success, Error }
 
 public sealed class EditorCommand(Action execute, Func<bool>? enabled = null) : ICommand
 {
@@ -30,6 +33,8 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
     private string status = "Open a TOML configuration or create a new one.", rawText = "", enginePath = "", previewName = "example.png", previewResult = "";
     private string resolvedPaths = "Validate or preview to resolve paths and exclusions.";
     private bool rawPending, textReplaced, busy, external, disposed, reloadPending;
+    public string ActionFeedback { get; private set; } = "";
+    public EditorFeedbackState ActionFeedbackState { get; private set; }
     private StartupState startupState = new(StartupStatus.Absent, null, "Select a configuration");
     public event PropertyChangedEventHandler? PropertyChanged;
     public ConfigurationDocument? Document => document;
@@ -62,7 +67,7 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
     }
     public ObservableCollection<ConfigurationSection>? Rules => selectedFolder?.Rules;
     public ConfigurationSection? SelectedRule { get => selectedRule; set { selectedRule = value; Notify(); Refresh(); } }
-    public string RawText { get => rawText; set { if (rawText == value) return; rawText = value; rawPending = true; Notify(); Refresh(); } }
+    public string RawText { get => rawText; set { if (rawText == value) return; if (!Busy) SetActionFeedback("", EditorFeedbackState.None); rawText = value; rawPending = true; Notify(); Refresh(); } }
     public string EnginePath { get => enginePath; set { enginePath = value; Notify(); RefreshStartup(); } }
     public string PreviewName { get => previewName; set { previewName = value; Notify(); } }
     public string PreviewResult { get => previewResult; private set { previewResult = value; Notify(); } }
@@ -75,6 +80,7 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
 
     public ICommand NewCommand { get; }
     public ICommand OpenCommand { get; }
+    public ICommand OpenCurrentTomlCommand { get; }
     public ICommand SaveCommand { get; }
     public ICommand SaveAsCommand { get; }
     public ICommand ReloadCommand { get; }
@@ -104,9 +110,15 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
         startup = startupStore ?? new RegistryStartupStore();
         NewCommand = new EditorCommand(New, () => !Busy);
         OpenCommand = new EditorCommand(async () => await OpenAsync(), () => !Busy);
-        SaveCommand = new EditorCommand(async () => await SaveAsync(false), () => !Busy && (document is not null || rawPending));
+        OpenCurrentTomlCommand = new EditorCommand(OpenCurrentToml, () => !Busy && file is not null);
+        SaveCommand = new EditorCommand(async () => await SaveAsync(false), () => !Busy && IsDirty && (document is not null || rawPending));
         SaveAsCommand = new EditorCommand(async () => await SaveAsync(true), () => !Busy && (document is not null || rawPending));
-        ReloadCommand = new EditorCommand(async () => { if (file is not null && ConfirmDiscard()) await LoadAsync(file.Path); }, () => !Busy && file is not null);
+        ReloadCommand = new EditorCommand(async () =>
+        {
+            if (file is null) return;
+            if (ConfirmDiscard()) await LoadAsync(file.Path, reportReload: true);
+            else SetActionFeedback("Ricaricamento annullato. La bozza è stata conservata.", EditorFeedbackState.None);
+        }, () => !Busy && file is not null);
         ValidateCommand = new EditorCommand(async () => await ValidateAsync(), () => !Busy && (document is not null || rawPending));
         PreviewCommand = new EditorCommand(async () => await PreviewAsync(), () => HasFolder);
         AddFolderCommand = new EditorCommand(() => SelectedFolder = document!.AddFolder(), () => CanEditForm);
@@ -141,11 +153,32 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
     private async Task OpenAsync()
     {
         if (!ConfirmDiscard()) return;
-        OpenFileDialog picker = new() { Filter = "TOML configuration|*.toml|All files|*.*" };
+        OpenFileDialog picker = new()
+        {
+            Filter = "TOML configuration|*.toml|All files|*.*",
+            InitialDirectory = file is null ? "" : Path.GetDirectoryName(file.Path) ?? "",
+            FileName = file is null ? "" : Path.GetFileName(file.Path)
+        };
         if (picker.ShowDialog(owner) == true) await LoadAsync(picker.FileName);
     }
-    private async Task LoadAsync(string path)
+    private void OpenCurrentToml()
     {
+        if (file is null) return;
+        try
+        {
+            try { Process.Start(new ProcessStartInfo(file.Path) { UseShellExecute = true }); }
+            catch (Win32Exception exception) when (exception.NativeErrorCode == 1155)
+            {
+                ProcessStartInfo editor = new("notepad.exe"); editor.ArgumentList.Add(file.Path);
+                Process.Start(editor);
+            }
+        }
+        catch (Exception exception) when (Expected(exception) || exception is Win32Exception)
+        { Status = "Cannot open TOML in its associated application: " + exception.Message; }
+    }
+    private async Task LoadAsync(string path, bool reportReload = false)
+    {
+        SetActionFeedback(reportReload ? "Ricaricamento dal file in corso…" : "", reportReload ? EditorFeedbackState.Running : EditorFeedbackState.None);
         Busy = true;
         try
         {
@@ -158,8 +191,14 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
             SetRaw(candidate.Text); Watch(); RefreshStartup();
             await RefreshDiskAndRuntimeAsync();
             Status = error is null ? "Loaded. Save validates the complete configuration. The engine runs independently." : "Invalid TOML; correct it in the TOML tab: " + error;
+            if (reportReload) SetActionFeedback(error is null ? "Configurazione ricaricata dal file. Nessuna scansione avviata." : "Ricaricamento: TOML non valido. " + error,
+                error is null ? EditorFeedbackState.Success : EditorFeedbackState.Error);
         }
-        catch (Exception exception) when (Expected(exception)) { Status = exception.Message; }
+        catch (Exception exception) when (Expected(exception))
+        {
+            Status = exception.Message;
+            if (reportReload) SetActionFeedback("Ricaricamento non riuscito: " + exception.Message, EditorFeedbackState.Error);
+        }
         finally { Busy = false; }
     }
     private void Attach(ConfigurationDocument? value, bool preserveSelection = false)
@@ -176,10 +215,11 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
         SelectedRule = selectedFolder?.Rules.ElementAtOrDefault(Math.Max(0, ruleIndex)) ?? selectedFolder?.Rules.FirstOrDefault();
         Refresh();
     }
-    private void DocumentChanged(object? sender, EventArgs e) { MarkTreeStale(); ResolvedPaths = "Settings changed. Validate or preview again to resolve paths."; Refresh(); Notify(nameof(SyncMessage)); }
+    private void DocumentChanged(object? sender, EventArgs e) { if (!Busy) SetActionFeedback("", EditorFeedbackState.None); MarkTreeStale(); ResolvedPaths = "Settings changed. Validate or preview again to resolve paths."; Refresh(); Notify(nameof(SyncMessage)); }
     private void New()
     {
         if (!ConfirmDiscard()) return;
+        SetActionFeedback("", EditorFeedbackState.None);
         watcher?.Dispose(); watcher = null; file = null; external = false;
         Attach(new ConfigurationDocument("version = 1\n[general]\ndry_run = true\n"));
         SelectedFolder = document!.AddFolder(); textReplaced = true; UpdateRaw(); RefreshStartup(); Refresh();
@@ -200,10 +240,25 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
     }
     private async Task ValidateAsync()
     {
+        SetActionFeedback("Verifica della configurazione in corso…", EditorFeedbackState.Running);
         Busy = true;
-        try { string text = Candidate(); Configuration config = await Task.Run(() => ConfigurationLoader.Parse(text)); ShowResolution(config); Status = "Configuration valid for the engine. No files were modified."; }
-        catch (Exception exception) when (Expected(exception)) { Status = "Validation failed: " + exception.Message; }
+        try
+        {
+            string text = Candidate(); Configuration config = await Task.Run(() => ConfigurationLoader.Parse(text)); ShowResolution(config);
+            Status = "Configuration valid for the engine. No files were modified.";
+            SetActionFeedback("Configurazione valida. Nessun file salvato o spostato.", EditorFeedbackState.Success);
+        }
+        catch (Exception exception) when (Expected(exception))
+        {
+            Status = "Validation failed: " + exception.Message;
+            SetActionFeedback("Configurazione non valida: " + exception.Message, EditorFeedbackState.Error);
+        }
         finally { Busy = false; }
+    }
+    private void SetActionFeedback(string message, EditorFeedbackState state)
+    {
+        ActionFeedback = message; ActionFeedbackState = state;
+        Notify(nameof(ActionFeedback)); Notify(nameof(ActionFeedbackState));
     }
     private async Task<bool> SaveAsync(bool saveAs)
     {
@@ -355,7 +410,7 @@ public sealed partial class EditorViewModel : INotifyPropertyChanged, IDisposabl
     private void Notify([CallerMemberName] string? property = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
     private void Refresh()
     {
-        foreach (string property in new[] { nameof(Document), nameof(Folders), nameof(IsDirty), nameof(Title), nameof(Busy), nameof(CanEditForm), nameof(HasFolder), nameof(HasRule), nameof(ConfigPath), nameof(ExternalMessage), nameof(ExternalChanged), nameof(CanManageStartup), nameof(IsInteractive), nameof(SyncMessage), nameof(CanEditTree) }) Notify(property);
+        foreach (string property in new[] { nameof(Document), nameof(Folders), nameof(IsDirty), nameof(Title), nameof(Busy), nameof(CanEditForm), nameof(HasFolder), nameof(HasRule), nameof(ConfigPath), nameof(ExternalMessage), nameof(ExternalChanged), nameof(CanManageStartup), nameof(IsInteractive), nameof(CanNavigate), nameof(SyncMessage), nameof(IsFormSynchronized), nameof(ManageSubfolders), nameof(CanEditTree) }) Notify(property);
         CommandManager.InvalidateRequerySuggested();
     }
     public void Dispose()

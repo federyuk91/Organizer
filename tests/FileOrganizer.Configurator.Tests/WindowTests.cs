@@ -16,13 +16,13 @@ using Xunit;
 
 namespace FileOrganizer.Configurator.Tests;
 
-public sealed class WindowTests
+public sealed partial class WindowTests
 {
     [Fact]
     public async Task WindowBindingsEditingOrderingAndAllTabsRender() => await OnSta(async () =>
     {
         using TestFixture f = new();
-        MainWindow window = new(f.Config, f.History, f.States) { Left = -20000, Top = -20000, ShowInTaskbar = false };
+        MainWindow window = new(f.Config, f.History, f.States, new InterfacePreferenceStore(Path.Combine(f.Root, "interface.txt"))) { Left = -20000, Top = -20000, ShowInTaskbar = false };
         window.Show();
         Assert.NotNull(window.Icon);
         EditorViewModel vm = (EditorViewModel)window.DataContext;
@@ -77,7 +77,7 @@ public sealed class WindowTests
     public async Task SavingFromEveryTabPreservesSelectionsAndEnablesEditing(int tabIndex) => await OnSta(async () =>
     {
         using TestFixture f = new();
-        MainWindow window = new(f.Config, f.History, f.States) { Left = -20000, Top = -20000, ShowInTaskbar = false };
+        MainWindow window = new(f.Config, f.History, f.States, new InterfacePreferenceStore(Path.Combine(f.Root, "interface.txt"))) { Left = -20000, Top = -20000, ShowInTaskbar = false };
         window.Show(); EditorViewModel vm = (EditorViewModel)window.DataContext;
         try
         {
@@ -99,7 +99,7 @@ public sealed class WindowTests
             Assert.Equal("Second folder", vm.SelectedFolder?.DisplayName);
             Assert.Equal("Second rule", vm.SelectedRule?.DisplayName);
             Assert.True(vm.HasFolder); Assert.True(vm.HasRule); Assert.True(vm.CanEditForm);
-            Assert.True(tabs.IsEnabled); Assert.True(vm.SaveCommand.CanExecute(null));
+            Assert.True(tabs.IsEnabled); Assert.False(vm.SaveCommand.CanExecute(null)); Assert.True(vm.SaveAsCommand.CanExecute(null));
             tabs.SelectedIndex = 0;
             await Eventually(() => Descendants<TextBox>(window).Any(t => t.IsEnabled &&
                 BindingOperations.GetBinding(t, TextBox.TextProperty)?.Path.Path == "SelectedFolder.Fields[name].Text"));
@@ -174,7 +174,7 @@ public sealed class WindowTests
     [Fact]
     public async Task RulePresetDropdownAndAddButtonWorkThroughWpfBindings() => await OnSta(async () =>
     {
-        using TestFixture f = new(); MainWindow window = new(f.Config, f.History, f.States) { Left = -20000, Top = -20000, ShowInTaskbar = false }; window.Show();
+        using TestFixture f = new(); MainWindow window = new(f.Config, f.History, f.States, new InterfacePreferenceStore(Path.Combine(f.Root, "interface.txt"))) { Left = -20000, Top = -20000, ShowInTaskbar = false }; window.Show();
         EditorViewModel vm = (EditorViewModel)window.DataContext;
         try
         {
@@ -254,7 +254,7 @@ public sealed class WindowTests
         using TestFixture f = new();
         ConfigurationFile initial = new(f.Config); ConfigurationDocument initialDocument = initial.Open();
         initialDocument.Folders[0].Fields["recursive"].Flag = true; initial.Save(initialDocument.Render());
-        MainWindow window = new(f.Config, f.History, f.States) { Left = -20000, Top = -20000, ShowInTaskbar = false };
+        MainWindow window = new(f.Config, f.History, f.States, new InterfacePreferenceStore(Path.Combine(f.Root, "interface.txt"))) { Left = -20000, Top = -20000, ShowInTaskbar = false };
         window.Show(); EditorViewModel vm = (EditorViewModel)window.DataContext;
         try
         {
@@ -560,7 +560,7 @@ public sealed class WindowTests
     public async Task WpfScanButtonsReflectBackgroundWorkerTransitions() => await OnSta(async () =>
     {
         using TestFixture f = new(); bool running = false;
-        MainWindow window = new(f.Config, f.History, f.States) { Left = -20000, Top = -20000, ShowInTaskbar = false };
+        MainWindow window = new(f.Config, f.History, f.States, new InterfacePreferenceStore(Path.Combine(f.Root, "interface.txt"))) { Left = -20000, Top = -20000, ShowInTaskbar = false };
         window.Show(); EditorViewModel original = (EditorViewModel)window.DataContext;
         await Eventually(() => original.Document is not null && !original.Busy);
         using EditorViewModel vm = new(window, new FakeStore(), f.History, f.States,
@@ -625,7 +625,7 @@ public sealed class WindowTests
     public async Task PathTreeMouseButtonsAndGrayExcludedRowsWorkInTheRealWindow() => await OnSta(async () =>
     {
         using TestFixture f = new(); Directory.CreateDirectory(Path.Combine(f.Root, "in", "project", "animations"));
-        MainWindow window = new(f.Config, f.History, f.States) { Left = -20000, Top = -20000, ShowInTaskbar = false }; window.Show();
+        MainWindow window = new(f.Config, f.History, f.States, new InterfacePreferenceStore(Path.Combine(f.Root, "interface.txt"))) { Left = -20000, Top = -20000, ShowInTaskbar = false }; window.Show();
         EditorViewModel vm = (EditorViewModel)window.DataContext;
         try
         {

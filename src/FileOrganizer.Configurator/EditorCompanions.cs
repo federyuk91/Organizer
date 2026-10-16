@@ -6,6 +6,8 @@ using FileOrganizer.Windows;
 
 namespace FileOrganizer.Configurator;
 
+public sealed record ConfigurationStatusRow(string Label, string Value);
+
 public sealed partial class EditorViewModel
 {
     private MoveHistory history = null!;
@@ -30,18 +32,25 @@ public sealed partial class EditorViewModel
     public string SavedSummary => savedSummary;
     public string RuntimeMessage => runtimeMessage;
     public string RuntimeWarning => runtimeWarning;
+    public bool IsFormSynchronized => file is not null && diskValid && !external && !IsDirty;
+    public bool IsEngineSynchronized => runningSnapshot is not null && runtimeWarning.Length == 0;
+    public string EngineStatusMessage => IsEngineSynchronized ? "Engine has applied the current configuration." : runtimeWarning;
+    public IReadOnlyList<ConfigurationStatusRow> SavedStatusRows { get; private set; } = [new("ON DISK:", "File values have not been verified.")];
+    public IReadOnlyList<ConfigurationStatusRow> RuntimeStatusRows { get; private set; } = [new("ENGINE:", "Engine state has not been verified.")];
     public string SyncMessage => file is null ? "UNSAVED DRAFT — no configuration file is active in this editor." :
         external ? "CONFLICT — form fields are a draft. See actual file values below." :
         !diskValid ? "ON-DISK CONFIGURATION IS NOT VERIFIED — engine settings may differ; see the status below." :
         IsDirty ? "UNSAVED DRAFT — changes shown in the form are NOT applied. Save to update the file. See current file values below." : "Form synchronized with the file at the last verification.";
     public string HistoryStatus => historyStatus;
     public IReadOnlyList<MoveRecord> HistoryEntries => historyEntries;
+    public IReadOnlyList<string> SelectedHistoryIds => selectedHistoryIds;
     public ICommand RefreshHistoryCommand { get; private set; } = null!;
     public ICommand UndoHistoryCommand { get; private set; } = null!;
     public ICommand CheckSyncCommand { get; private set; } = null!;
     public ICommand OpenEngineConfigCommand { get; private set; } = null!;
     public ICommand StopWorkerCommand { get; private set; } = null!;
     public ICommand CancelUndoCommand { get; private set; } = null!;
+    public bool CanNavigate => !Busy || undoCancellation is not null;
     public void SelectHistory(IEnumerable<MoveRecord> selected)
     { selectedHistoryIds = selected.Select(e => e.Id).ToArray(); CommandManager.InvalidateRequerySuggested(); }
 
@@ -119,17 +128,34 @@ public sealed partial class EditorViewModel
                     snapshot.Engine.ConfigHash != diskHash ? "WARNING: engine has NOT applied the current file. " : "Applied snapshot matches this file. ") +
                 (snapshot.Engine.ReloadError is null ? "" : "Reload rejected: " + snapshot.Engine.ReloadError + ". ") +
                 string.Join("; ", snapshot.Engine.Folders.Select(f => $"{f.Name}: enabled={f.Enabled}, Include subfolders={f.Recursive}, path overrides={f.PathOverrides?.Length ?? 0} (see Managed paths)"));
+            SavedStatusRows = snapshot.Config is null ? [new("ON DISK:", "Missing or invalid configuration.")] :
+                [new("ON DISK:", observed!.Path), .. snapshot.Config.Folders.Select(f => new ConfigurationStatusRow(f.Name + ":",
+                    $"enabled={f.Enabled}; Include subfolders={f.Recursive}; source={f.Path}; path overrides={(f.PathOverrides.IsDefault ? 0 : f.PathOverrides.Length)} (see Managed paths)"))];
+            RuntimeStatusRows = snapshot.Engine is null ? [new("ENGINE:", "Not verified (stopped or an older version without status reporting).")] :
+                [new($"ENGINE PID {snapshot.Engine.Pid}:", snapshot.Engine.Executable), new("TOML:", snapshot.Engine.ConfigPath),
+                 new("Applied snapshot:", (IsEngineSynchronized ? "Matches this file. " : runtimeWarning + " ") +
+                    string.Join("; ", snapshot.Engine.Folders.Select(f => $"{f.Name}: enabled={f.Enabled}, Include subfolders={f.Recursive}, path overrides={f.PathOverrides?.Length ?? 0} (see Managed paths)")))];
             Notify(nameof(SavedSummary)); Notify(nameof(RuntimeMessage)); Notify(nameof(RuntimeWarning)); Notify(nameof(SyncMessage)); CommandManager.InvalidateRequerySuggested();
+            NotifyStatusPresentation();
         }
         catch (Exception exception) when (Expected(exception))
         {
             if (disposed || !ReferenceEquals(observed, file) || version != Volatile.Read(ref verificationVersion)) return;
             diskValid = false; savedSummary = "ON DISK: UNVERIFIED — " + exception.Message; runtimeMessage = "ENGINE: UNVERIFIED"; runtimeWarning = "WARNING — applied settings cannot be verified.";
+            runningSnapshot = null;
+            SavedStatusRows = [new("ON DISK:", "UNVERIFIED — " + exception.Message)];
+            RuntimeStatusRows = [new("ENGINE:", "UNVERIFIED")];
             CheckAppliedTree(null);
             ObserveWorkerProcess(null);
             Notify(nameof(SavedSummary)); Notify(nameof(RuntimeMessage)); Notify(nameof(RuntimeWarning)); Notify(nameof(SyncMessage));
+            NotifyStatusPresentation();
             CommandManager.InvalidateRequerySuggested();
         }
+    }
+    private void NotifyStatusPresentation()
+    {
+        Notify(nameof(IsFormSynchronized)); Notify(nameof(IsEngineSynchronized)); Notify(nameof(EngineStatusMessage));
+        Notify(nameof(SavedStatusRows)); Notify(nameof(RuntimeStatusRows));
     }
     public async Task RefreshHistoryAsync()
     {

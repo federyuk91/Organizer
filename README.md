@@ -4,6 +4,7 @@ Organizza automaticamente i file su **Windows 10/11 x64**, con regole ordinate e
 
 ## Funzionalità
 
+- Due interfacce WPF alternative, Classic e Modern, con cambio immediato e stato condiviso.
 - Più cartelle monitorate, ciascuna con regole indipendenti e priorità modificabile.
 - Filtri per estensione, nome tramite glob (`*gatt*`, `*.pdf`) ed esclusioni.
 - Destinazioni relative o assolute, anche su altri dischi.
@@ -15,6 +16,8 @@ Organizza automaticamente i file su **Windows 10/11 x64**, con regole ordinate e
 - Cronologia persistente e annullamento verificato degli spostamenti degli ultimi sette giorni.
 - Avvio con Windows per l’utente corrente, configurabile dalla GUI senza amministratore.
 - Monitoraggio a eventi, coda limitata e nessuna scansione periodica durante il funzionamento normale.
+
+La versione **1.3.2** include la nuova interfaccia Modern opzionale, i controlli di scansione, gli indicatori di sincronizzazione e la gestione confermata dei sottopercorsi.
 
 ## Installazione
 
@@ -28,6 +31,16 @@ L’icona trasparente della cartella viene assegnata automaticamente al programm
 Il setup non crea una configurazione attiva, non avvia il motore e non registra l’avvio automatico. `Config.Example.toml` viene installato solo come esempio. Il pacchetto attuale non è firmato digitalmente: Windows potrebbe mostrare un avviso di editore sconosciuto; verifica provenienza e hash SHA-256 prima di eseguirlo.
 
 Per controllare la versione installata, apri le proprietà di `%LOCALAPPDATA%\Programs\FileOrganizer\FileOrganizer.Configurator.exe`, scheda **Dettagli → Versione file**. Dopo un aggiornamento anche il motore in `engine\FileOrganizer.exe` deve riportare la stessa versione. La voce nelle app installate viene aggiornata dal setup.
+
+### Interfacce Classic e Modern
+
+Il pulsante quadrato con icona, a sinistra di **Modern / Classic** in alto, cambia vista nella stessa finestra senza riavviare il configuratore. L’icona indica la modalità corrente; il tooltip indica quella a cui passare. Classic conserva l’interfaccia originale; Modern offre navigazione laterale, pannelli separati per cartelle/regole/dettagli e controlli con stile Fluent. Entrambe utilizzano lo stesso modello, i comandi, il TOML e i servizi.
+
+Lo switch conserva bozze, TOML non ancora applicato, cartella/regola selezionate, pagina corrente, selezione della cronologia e operazioni in corso; non salva il TOML, non avvia scansioni e non modifica l’autorun. La preferenza è salvata atomicamente in `%LOCALAPPDATA%\FileOrganizer\interface.txt`, separata dalla configurazione del motore, e ripristinata al prossimo avvio. Senza preferenza viene usata Classic; errori di lettura/scrittura vengono segnalati senza bloccare l’editor.
+
+Nella Modern, **Open…** accanto al percorso sceglie una configurazione partendo dalla cartella corrente; **Open** nella scheda TOML apre il file salvato nell’editor associato (Blocco note se manca un’associazione). Le bozze restano nella GUI. Gli indicatori verdi/rossi distinguono sincronizzazione del form e stato applicato del motore; le scansioni si avviano e arrestano in basso a destra. **Save** è disponibile solo con modifiche; **Save As…** anche senza modifiche.
+
+Nella Modern, **Cancel undo** è nella scheda **History** e resta utilizzabile durante il ripristino. **Reload** e **Validate** mostrano un messaggio sotto la barra: operazione in corso, esito verde o errore rosso; il messaggio rimane leggibile senza finestre aggiuntive. L’abilitazione della cartella si controlla dalla lista **Monitored folders**. **Manage subfolder** richiede conferma e modifica i **Managed paths** della cartella selezionata: attivandolo sostituisce selezioni ed esclusioni del ramo con una selezione ricorsiva, valida anche per sottocartelle future; disattivandolo include solo i file diretti. Le destinazioni esterne e gli altri monitor restano invariati. Per scelte dettagliate usa **Managed paths**; le modifiche si applicano solo con **Save**. La spunta riflette la ricorsività effettiva del ramo nella bozza, comprese le selezioni dei percorsi.
 
 ### Prima configurazione
 
@@ -166,10 +179,10 @@ Requisiti di sviluppo: Windows x64 e .NET 10 SDK (versione in [global.json](glob
 
 ```powershell
 ./scripts/build.ps1
-./scripts/build-installer.ps1 -Version 1.2.6
+./scripts/build-installer.ps1 -Version 1.3.2
 
 # Fallback senza toolchain C++:
-./scripts/build-installer.ps1 -Version 1.2.6 -EngineMode Standard
+./scripts/build-installer.ps1 -Version 1.3.2 -EngineMode Standard
 
 # Compilatore Inno in un percorso diverso:
 ./scripts/build-installer.ps1 -CompilerPath "C:\tools\Inno Setup 6\ISCC.exe"
@@ -192,7 +205,7 @@ Output in `artifacts/publish/`. Per AOT basta `FileOrganizer.exe`; per motore st
 
 `scripts/build.ps1` compila l’intera soluzione ed esegue i test; `-EngineOnly` esclude WPF. Per includere il test fisico tra volumi, imposta `FILEORGANIZER_TEST_SECOND_VOLUME` su un percorso temporaneo scrivibile in un altro disco. Il test crea e rimuove solo una propria sottocartella univoca. In assenza di questa variabile quel test viene saltato; i test non usano le vere cartelle Download o Desktop.
 
-Verifica del 15 ottobre 2026, Windows x64/.NET SDK 10.0.401: **164 test superati** (131 core/integrazione, 33 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Avvio effettivo al login Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
+Verifica del 16 ottobre 2026, Windows x64/.NET SDK 10.0.401: **180 test superati** (131 core/integrazione, 49 WPF), zero errori o avvisi, incluso il trasferimento C: → D:. Verificati watcher, riclassificazione, duplicati, collisioni, salvataggi e conflitti TOML, cronologia/undo persistenti e tra volumi, cancellazione e scritture interrotte, sincronizzazione della ricorsività, stato applicato/rifiutato, nomi contenenti percentuali, file scomparsi durante l’attesa, blocco tra TOML diversi, arresto sicuro, permessi e registrazioni HKCU su chiavi isolate. Avvio effettivo al login Windows, altre versioni Windows e dialoghi nativi richiedono ancora una verifica manuale.
 
 Il setup è stato verificato con installazione per utente senza amministratore, collegamenti, motore installato, simulazione, avvio/chiusura GUI, reinstallazione senza perdita del TOML, disinstallazione e rimozione selettiva dell’autorun. Puoi ripetere la prova con `./scripts/verify-installer.ps1`: usa una cartella sotto `artifacts/installer`, crea temporaneamente proprie voci HKCU e le pulisce alla fine. Richiede un account senza installazioni o collegamenti File Organizer preesistenti, per non interferire con l’uso reale. I log restano negli artefatti di verifica.
 
@@ -212,7 +225,7 @@ Sono osservazioni su questa macchina, non garanzie. `scripts/verify-publish.ps1`
 - `src/FileOrganizer.Core`: configurazione, validazione, regole e directory gestite.
 - `src/FileOrganizer.Windows`: trasferimenti sicuri, watcher, persistenza e autorun.
 - `src/FileOrganizer`: CLI e motore.
-- `src/FileOrganizer.Configurator`: editor WPF indipendente.
+- `src/FileOrganizer.Configurator`: shell e modello condivisi; viste `Views/ClassicView` e `Views/ModernView` con risorse separate, preferenza UI indipendente dal TOML.
 - `tests`: test core, Windows e WPF.
 - `installer` e `scripts`: setup, build, publish e verifiche.
 

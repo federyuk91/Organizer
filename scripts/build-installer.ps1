@@ -1,5 +1,5 @@
 param(
-    [ValidatePattern('^\d+\.\d+\.\d+(\.\d+)?$')][string]$Version = '1.2.6',
+    [ValidatePattern('^\d+\.\d+\.\d+(\.\d+)?$')][string]$Version = '1.3.2',
     [ValidateSet('Aot', 'Standard')][string]$EngineMode = 'Aot',
     [string]$CompilerPath,
     [switch]$SkipPublish

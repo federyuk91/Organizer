@@ -63,7 +63,7 @@ The solution uses xUnit; WPF tests run on an STA dispatcher with real bindings a
 3. Validate `Config.Example.toml` with CLI using test-only safe source paths or a temporary transformed copy.
 4. Run integration tests covering real filesystem watcher behavior where supported.
 5. `dotnet publish` on Windows (AOT if compatible), verify output launches and `--help`/`validate` work.
-6. Build the setup with `./scripts/build-installer.ps1 -Version 1.2.6`, then run `./scripts/verify-installer.ps1 -Isolated` when File Organizer is already installed. Check GUI startup, shortcuts/icons, dry run, upgrade retention, uninstall and scoped HKCU cleanup.
+6. Build the setup with `./scripts/build-installer.ps1 -Version 1.3.2`, then run `./scripts/verify-installer.ps1 -Isolated` when File Organizer is already installed. Check GUI startup, shortcuts/icons, dry run, upgrade retention, uninstall and scoped HKCU cleanup.
 7. Report untested Windows-specific cases honestly when environment is not Windows.
 
 **Release gate:** no failing safety/integrity tests; no unexplained skipped required tests. If a feature cannot be validated, document precise limits and do not claim that it passed.
@@ -84,7 +84,7 @@ The solution uses xUnit; WPF tests run on an STA dispatcher with real bindings a
 
 ## Current verification baseline
 
-Version `1.2.6`, verified on 15 October 2026 with Windows x64 and .NET SDK 10.0.401: 164 passed, 0 failed, 0 skipped (131 core/Windows/CLI and 33 WPF), including physical C: to D: transfers. Release build had no warnings or errors. The Native AOT engine, self-contained WPF publish and isolated installer lifecycle passed. Tests never scan the user's actual Downloads/Desktop or change the user's normal autorun entry.
+Version `1.3.2`, verified on 16 October 2026 with Windows x64 and .NET SDK 10.0.401: 180 passed, 0 failed, 0 skipped (131 core/Windows/CLI and 49 WPF), including physical C: to D: transfers. Release build had no warnings or errors. The Native AOT engine, self-contained WPF publish and isolated installer lifecycle passed. Tests never scan the user's actual Downloads/Desktop or change the user's normal autorun entry.
 
 T-01–T-43 are acceptance scenarios, not a one-to-one list of test methods. Document persistence tests additionally cover comments/unknown data, exact no-edit round trips, atomic save/backup, invalid candidates and external conflicts; startup tests cover read-back and access failures through isolated/fake stores.
 
@@ -97,3 +97,16 @@ Save regression: from each of the five WPF tabs, save a non-first folder/rule se
 Connecting-path regression: a direct Documents/Allegato-3_eventi.doc is moved to Documents/Editables by scan and watcher processing, while unselected projects stay intact. Exclusions, independent external roots and cross-monitor ownership remain protected. Tests use temporary directories only.
 
 Applied-tree compatibility: accept prior diagnostic snapshots for basic status, but refuse reconstructing the new connecting-directory policy from snapshot versions 1/2. Version 3 is required for the applied path tree.
+
+## Classic / Modern interface compatibility
+
+| ID | Requirements | Verification |
+|---|---|---|
+| T-44 | R-31 | Real WPF switch button changes both directions, persists/reloads the preference, and defaults/falls back to Classic on missing/invalid preferences. Atomic preference writes and failures preserve TOML and leave the selected view usable. |
+| T-45 | R-31 | Shared model identity, dirty field/raw TOML drafts, folder/rule selection, current page, history selection, path draft and in-progress scan/stop survive switches. Both views expose all existing commands; Modern additionally opens the current TOML in its associated editor; Modern pages render with valid bindings and save engine-accepted TOML. Modern autorun toggle uses the shared registration logic with an isolated store. |
+
+Reload/Validate feedback is tested for progress, success and failure without saving. Modern History cancellation remains clickable during a simulated active undo while editing stays blocked; folder enabled editing has no duplicate toggle. Manage subfolder confirmation/rejection, stale-draft rejection, replacement of branch overrides, recursive future descendants, direct-only disabling, external destination preservation, tree refresh and engine-accepted save are covered.
+
+Modern status indicators are checked against verified form/engine state, including reload rejection. Tests also check blue status labels, icon/text spacing, checkbox toggling, bottom scan controls, and Save/Save As availability in both views. Native Open dialogs and external editor launch still require manual verification.
+
+Rendered previews of every Classic and Modern page are saved under `artifacts/gui-preview/`. Native picker dialogs, high-contrast appearance, assistive technology and DPI settings beyond the rendering fixture require manual verification. Stopping a real worker for tests requires explicit user authorization; never restart scans against personal folders as a test side effect.
