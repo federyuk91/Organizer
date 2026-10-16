@@ -57,6 +57,28 @@
  </Style>
  <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Background" Value="{DynamicResource AccentBrush}"/><Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Style>
  <Style x:Key="SmallButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Padding" Value="8,5"/><Setter Property="MinHeight" Value="30"/></Style>
+ <Style x:Key="IconOnlyButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+  <Setter Property="Width" Value="30"/><Setter Property="Height" Value="30"/><Setter Property="MinHeight" Value="30"/><Setter Property="Padding" Value="6"/><Setter Property="Margin" Value="4,0,0,0"/>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+   <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="5">
+    <Path x:Name="ActionIcon" Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.4" Width="14" Height="14" Stretch="Uniform"/>
+   </Border>
+   <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="{DynamicResource HoverBrush}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.75"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers>
+  </ControlTemplate></Setter.Value></Setter>
+ </Style>
+ <Style x:Key="PathSelector" TargetType="Button">
+  <Setter Property="Width" Value="22"/><Setter Property="Height" Value="24"/><Setter Property="Margin" Value="0,1,6,1"/><Setter Property="VerticalAlignment" Value="Center"/>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+   <Grid Background="Transparent"><Border x:Name="Box" Width="16" Height="16" CornerRadius="3" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource MutedBrush}" BorderThickness="1">
+    <Grid><Path x:Name="Tick" Data="M3,8 L6,11 L12,4" Stroke="{DynamicResource AccentTextBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/><Rectangle x:Name="Partial" Width="7" Height="7" Fill="{DynamicResource AccentTextBrush}" Visibility="Collapsed"/></Grid>
+   </Border></Grid>
+   <ControlTemplate.Triggers>
+    <DataTrigger Binding="{Binding Symbol}" Value="✓"><Setter TargetName="Box" Property="Background" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Tick" Property="Visibility" Value="Visible"/></DataTrigger>
+    <DataTrigger Binding="{Binding Symbol}" Value="■"><Setter TargetName="Box" Property="Background" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/><Setter TargetName="Partial" Property="Visibility" Value="Visible"/></DataTrigger>
+    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderThickness" Value="2"/><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="Box" Property="Opacity" Value="0.7"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+   </ControlTemplate.Triggers>
+  </ControlTemplate></Setter.Value></Setter>
+ </Style>
  <Style TargetType="TextBox">
   <Setter Property="Padding" Value="9,6"/><Setter Property="Margin" Value="0,3,0,10"/><Setter Property="MinHeight" Value="34"/>
   <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>

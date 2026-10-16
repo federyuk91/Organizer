@@ -78,16 +78,24 @@
   <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="10"/><ColumnDefinition Width="190"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
    <Border Style="{StaticResource Card}" Padding="10">
     <DockPanel>
-     <StackPanel DockPanel.Dock="Top"><TextBlock Text="Monitored folders" Style="{StaticResource Heading}"/><WrapPanel><Button Content="Add" Command="{Binding AddFolderCommand}" Tag="{StaticResource IconAdd}" Style="{StaticResource SmallButton}"/><Button Content="Remove" Command="{Binding RemoveFolderCommand}" Tag="{StaticResource IconRemove}" Style="{StaticResource SmallButton}"/></WrapPanel><WrapPanel><Button Content="Up" Command="{Binding FolderUpCommand}" Tag="{StaticResource IconUp}" Style="{StaticResource SmallButton}"/><Button Content="Down" Command="{Binding FolderDownCommand}" Tag="{StaticResource IconDown}" Style="{StaticResource SmallButton}"/></WrapPanel></StackPanel>
+     <StackPanel DockPanel.Dock="Top">
+      <DockPanel Margin="0,0,0,10">
+       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Command="{Binding AddFolderCommand}" Tag="{StaticResource IconAdd}" Style="{StaticResource IconOnlyButton}" ToolTip="Add folder" AutomationProperties.Name="Add folder"/><Button Command="{Binding RemoveFolderCommand}" Tag="{StaticResource IconRemove}" Style="{StaticResource IconOnlyButton}" ToolTip="Remove folder" AutomationProperties.Name="Remove folder"/></StackPanel>
+       <TextBlock Text="Folders: " Style="{StaticResource Heading}" Margin="0" VerticalAlignment="Center"/>
+      </DockPanel>
+      <WrapPanel><Button Content="Up" Command="{Binding FolderUpCommand}" Tag="{StaticResource IconUp}" Style="{StaticResource SmallButton}"/><Button Content="Down" Command="{Binding FolderDownCommand}" Tag="{StaticResource IconDown}" Style="{StaticResource SmallButton}"/></WrapPanel>
+     </StackPanel>
      <ListBox ItemsSource="{Binding Folders}" SelectedItem="{Binding SelectedFolder}" BorderThickness="0"><ListBox.ItemTemplate><DataTemplate><DockPanel><CheckBox IsChecked="{Binding Fields[enabled].Flag}" Margin="0,0,6,0"/><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/></DockPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
     </DockPanel>
    </Border>
    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="10" IsEnabled="{Binding HasFolder}">
     <DockPanel>
      <StackPanel DockPanel.Dock="Top">
-      <TextBlock Text="Rules" Style="{StaticResource Heading}"/>
+      <DockPanel Margin="0,0,0,10">
+       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button Command="{Binding AddRuleCommand}" Tag="{StaticResource IconAdd}" Style="{StaticResource IconOnlyButton}" ToolTip="Add rule using selected template" AutomationProperties.Name="Add rule"/><Button Command="{Binding RemoveRuleCommand}" Tag="{StaticResource IconRemove}" Style="{StaticResource IconOnlyButton}" ToolTip="Remove rule" AutomationProperties.Name="Remove rule"/><Button Command="{Binding DuplicateRuleCommand}" Tag="{StaticResource IconDuplicate}" Style="{StaticResource IconOnlyButton}" ToolTip="Duplicate rule" AutomationProperties.Name="Duplicate rule"/></StackPanel>
+       <TextBlock Text="Rules: " Style="{StaticResource Heading}" Margin="0" VerticalAlignment="Center"/>
+      </DockPanel>
       <ComboBox ItemsSource="{x:Static local:EditorViewModel.RulePresets}" SelectedItem="{Binding SelectedRulePreset}" DisplayMemberPath="Name" AutomationProperties.Name="Rule template"><ComboBox.ToolTip><TextBlock Text="{Binding SelectedRulePreset.Description}" MaxWidth="440" TextWrapping="Wrap"/></ComboBox.ToolTip></ComboBox>
-      <WrapPanel><Button Content="Add" Command="{Binding AddRuleCommand}" Tag="{StaticResource IconAdd}" Style="{StaticResource SmallButton}"/><Button Content="Duplicate" Command="{Binding DuplicateRuleCommand}" Tag="{StaticResource IconDuplicate}" Style="{StaticResource SmallButton}"/><Button Content="Remove" Command="{Binding RemoveRuleCommand}" Tag="{StaticResource IconRemove}" Style="{StaticResource SmallButton}"/></WrapPanel>
       <WrapPanel><Button Content="Up" Command="{Binding RuleUpCommand}" Tag="{StaticResource IconUp}" Style="{StaticResource SmallButton}"/><Button Content="Down" Command="{Binding RuleDownCommand}" Tag="{StaticResource IconDown}" Style="{StaticResource SmallButton}"/></WrapPanel>
       <TextBlock Text="First matching rule wins." Style="{StaticResource Hint}"/>
      </StackPanel>
@@ -98,9 +106,12 @@
     <StackPanel>
      <Border Style="{StaticResource Card}" IsEnabled="{Binding HasRule}" Margin="0,0,0,12">
       <StackPanel>
-       <TextBlock Text="Rule details" Style="{StaticResource Heading}"/>
+       <DockPanel Margin="0,0,0,10">
+        <CheckBox DockPanel.Dock="Left" IsChecked="{Binding SelectedRule.Fields[enabled].Flag}" Margin="0,0,8,0" ToolTip="Enable rule" AutomationProperties.Name="Enable rule" VerticalAlignment="Center"/>
+        <CheckBox DockPanel.Dock="Right" Content="Case sensitive" IsChecked="{Binding SelectedRule.Fields[case_sensitive].Flag}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+        <TextBlock Text="{Binding SelectedRule.DisplayName, StringFormat={}{0} Details: }" Style="{StaticResource Heading}" Margin="0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"><TextBlock.ToolTip><TextBlock Text="{Binding SelectedRule.DisplayName}"/></TextBlock.ToolTip></TextBlock>
+       </DockPanel>
        <TextBlock Text="Name"/><TextBox Text="{Binding SelectedRule.Fields[name].Text, UpdateSourceTrigger=PropertyChanged}"/>
-       <WrapPanel><CheckBox Content="Enabled" IsChecked="{Binding SelectedRule.Fields[enabled].Flag}"/><CheckBox Content="Case sensitive" IsChecked="{Binding SelectedRule.Fields[case_sensitive].Flag}"/></WrapPanel>
        <TextBlock Text="Destination"/><DockPanel><Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseDestinationCommand}" Tag="{StaticResource IconFolder}" Margin="6,3,0,10"/><TextBox Text="{Binding SelectedRule.Fields[destination].Text, UpdateSourceTrigger=PropertyChanged}"/></DockPanel>
        <TextBlock Text="Absolute path or relative to this source. Environment variables are supported." Style="{StaticResource Hint}"/>
        <TextBlock Text="Extensions — one per line"/><TextBox Text="{Binding SelectedRule.Fields[extensions].Text, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Height="82"/>
@@ -128,8 +139,8 @@
       <TreeView.ItemTemplate>
        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
         <StackPanel Orientation="Horizontal" ToolTip="{Binding Description}">
-         <Button Content="{Binding Symbol}" Width="32" Padding="2" Margin="0,1,6,1" FontSize="16" Click="OnPathLeftClick" PreviewMouseRightButtonUp="OnPathRightClick" AutomationProperties.Name="{Binding Label}">
-          <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="IsEnabled" Value="{Binding CanCycle}"/><Style.Triggers><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=TreeView}}" Value="False"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></Button.Style>
+         <Button Click="OnPathLeftClick" PreviewMouseRightButtonUp="OnPathRightClick" AutomationProperties.Name="{Binding Label}">
+          <Button.Style><Style TargetType="Button" BasedOn="{StaticResource PathSelector}"><Setter Property="IsEnabled" Value="{Binding CanCycle}"/><Style.Triggers><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=TreeView}}" Value="False"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></Button.Style>
          </Button>
          <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
         </StackPanel>

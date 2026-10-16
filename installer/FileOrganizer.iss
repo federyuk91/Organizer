@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.3.2"
+  #define AppVersion "1.3.3"
 #endif
 #ifndef PayloadDir
   #error PayloadDir must point to the staged installer payload.

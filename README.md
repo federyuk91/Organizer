@@ -17,7 +17,7 @@ Organizza automaticamente i file su **Windows 10/11 x64**, con regole ordinate e
 - Avvio con Windows per l’utente corrente, configurabile dalla GUI senza amministratore.
 - Monitoraggio a eventi, coda limitata e nessuna scansione periodica durante il funzionamento normale.
 
-La versione **1.3.2** include la nuova interfaccia Modern opzionale, i controlli di scansione, gli indicatori di sincronizzazione e la gestione confermata dei sottopercorsi.
+La versione **1.3.3** aggiorna la Modern con selettori blu nei Managed paths e comandi compatti per cartelle e regole; la Classic rimane disponibile.
 
 ## Installazione
 
@@ -40,7 +40,9 @@ Lo switch conserva bozze, TOML non ancora applicato, cartella/regola selezionate
 
 Nella Modern, **Open…** accanto al percorso sceglie una configurazione partendo dalla cartella corrente; **Open** nella scheda TOML apre il file salvato nell’editor associato (Blocco note se manca un’associazione). Le bozze restano nella GUI. Gli indicatori verdi/rossi distinguono sincronizzazione del form e stato applicato del motore; le scansioni si avviano e arrestano in basso a destra. **Save** è disponibile solo con modifiche; **Save As…** anche senza modifiche.
 
-Nella Modern, **Cancel undo** è nella scheda **History** e resta utilizzabile durante il ripristino. **Reload** e **Validate** mostrano un messaggio sotto la barra: operazione in corso, esito verde o errore rosso; il messaggio rimane leggibile senza finestre aggiuntive. L’abilitazione della cartella si controlla dalla lista **Monitored folders**. **Manage subfolder** richiede conferma e modifica i **Managed paths** della cartella selezionata: attivandolo sostituisce selezioni ed esclusioni del ramo con una selezione ricorsiva, valida anche per sottocartelle future; disattivandolo include solo i file diretti. Le destinazioni esterne e gli altri monitor restano invariati. Per scelte dettagliate usa **Managed paths**; le modifiche si applicano solo con **Save**. La spunta riflette la ricorsività effettiva del ramo nella bozza, comprese le selezioni dei percorsi.
+Nella Modern, **Cancel undo** è nella scheda **History** e resta utilizzabile durante il ripristino. **Reload** e **Validate** mostrano un messaggio sotto la barra: operazione in corso, esito verde o errore rosso; il messaggio rimane leggibile senza finestre aggiuntive. L’abilitazione della cartella si controlla dalla lista **Folders:**. **Manage subfolder** richiede conferma e modifica i **Managed paths** della cartella selezionata: attivandolo sostituisce selezioni ed esclusioni del ramo con una selezione ricorsiva, valida anche per sottocartelle future; disattivandolo include solo i file diretti. Le destinazioni esterne e gli altri monitor restano invariati. Per scelte dettagliate usa **Managed paths**; le modifiche si applicano solo con **Save**. La spunta riflette la ricorsività effettiva del ramo nella bozza, comprese le selezioni dei percorsi.
+
+Le intestazioni **Folders:** e **Rules:** hanno il pulsante **+** a destra; rimozione e duplicazione usano icone con tooltip. Nei dettagli, il checkbox senza etichetta a sinistra di **NomeRegola Details:** abilita la regola; **Case sensitive** è a destra. Nei **Managed paths**, il selettore blu mostra una spunta per i rami completi e un quadrato per quelli parziali; i cicli con clic sinistro/destro restano invariati.
 
 ### Prima configurazione
 
@@ -179,10 +181,10 @@ Requisiti di sviluppo: Windows x64 e .NET 10 SDK (versione in [global.json](glob
 
 ```powershell
 ./scripts/build.ps1
-./scripts/build-installer.ps1 -Version 1.3.2
+./scripts/build-installer.ps1 -Version 1.3.3
 
 # Fallback senza toolchain C++:
-./scripts/build-installer.ps1 -Version 1.3.2 -EngineMode Standard
+./scripts/build-installer.ps1 -Version 1.3.3 -EngineMode Standard
 
 # Compilatore Inno in un percorso diverso:
 ./scripts/build-installer.ps1 -CompilerPath "C:\tools\Inno Setup 6\ISCC.exe"

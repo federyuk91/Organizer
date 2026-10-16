@@ -63,7 +63,7 @@ The solution uses xUnit; WPF tests run on an STA dispatcher with real bindings a
 3. Validate `Config.Example.toml` with CLI using test-only safe source paths or a temporary transformed copy.
 4. Run integration tests covering real filesystem watcher behavior where supported.
 5. `dotnet publish` on Windows (AOT if compatible), verify output launches and `--help`/`validate` work.
-6. Build the setup with `./scripts/build-installer.ps1 -Version 1.3.2`, then run `./scripts/verify-installer.ps1 -Isolated` when File Organizer is already installed. Check GUI startup, shortcuts/icons, dry run, upgrade retention, uninstall and scoped HKCU cleanup.
+6. Build the setup with `./scripts/build-installer.ps1 -Version 1.3.3`, then run `./scripts/verify-installer.ps1 -Isolated` when File Organizer is already installed. Check GUI startup, shortcuts/icons, dry run, upgrade retention, uninstall and scoped HKCU cleanup.
 7. Report untested Windows-specific cases honestly when environment is not Windows.
 
 **Release gate:** no failing safety/integrity tests; no unexplained skipped required tests. If a feature cannot be validated, document precise limits and do not claim that it passed.
@@ -84,7 +84,7 @@ The solution uses xUnit; WPF tests run on an STA dispatcher with real bindings a
 
 ## Current verification baseline
 
-Version `1.3.2`, verified on 16 October 2026 with Windows x64 and .NET SDK 10.0.401: 180 passed, 0 failed, 0 skipped (131 core/Windows/CLI and 49 WPF), including physical C: to D: transfers. Release build had no warnings or errors. The Native AOT engine, self-contained WPF publish and isolated installer lifecycle passed. Tests never scan the user's actual Downloads/Desktop or change the user's normal autorun entry.
+Version `1.3.3`, verified on 16 October 2026 with Windows x64 and .NET SDK 10.0.401: 180 passed, 0 failed, 0 skipped (131 core/Windows/CLI and 49 WPF), including physical C: to D: transfers. Release build had no warnings or errors. The Native AOT engine, self-contained WPF publish and isolated installer lifecycle passed. Tests never scan the user's actual Downloads/Desktop or change the user's normal autorun entry.
 
 T-01–T-43 are acceptance scenarios, not a one-to-one list of test methods. Document persistence tests additionally cover comments/unknown data, exact no-edit round trips, atomic save/backup, invalid candidates and external conflicts; startup tests cover read-back and access failures through isolated/fake stores.
 
@@ -110,3 +110,5 @@ Reload/Validate feedback is tested for progress, success and failure without sav
 Modern status indicators are checked against verified form/engine state, including reload rejection. Tests also check blue status labels, icon/text spacing, checkbox toggling, bottom scan controls, and Save/Save As availability in both views. Native Open dialogs and external editor launch still require manual verification.
 
 Rendered previews of every Classic and Modern page are saved under `artifacts/gui-preview/`. Native picker dialogs, high-contrast appearance, assistive technology and DPI settings beyond the rendering fixture require manual verification. Stopping a real worker for tests requires explicit user authorization; never restart scans against personal folders as a test side effect.
+
+Modern rendered previews cover the blue managed-path selectors, compact Folders/Rules headers and dynamic rule details header. Existing preset, command-parity, ordering, scope and save tests verify the shared behavior after these presentation changes.

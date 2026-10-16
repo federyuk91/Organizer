@@ -139,7 +139,7 @@ public sealed partial class WindowTests
             foreach (Button button in Descendants<Button>(window).Where(b => b.Tag is Geometry))
             {
                 System.Windows.Shapes.Path icon = (System.Windows.Shapes.Path)button.Template.FindName("ActionIcon", button);
-                Assert.Equal(8, icon.Margin.Right); Assert.Equal(14, icon.Width);
+                Assert.Equal(button.Content is null ? 0 : 8, icon.Margin.Right); Assert.Equal(14, icon.Width);
             }
             Button open = Descendants<Button>(window).Single(b => ReferenceEquals(b.Command, vm.OpenCommand));
             TextBox config = Descendants<TextBox>(window).Single(t => System.Windows.Data.BindingOperations.GetBinding(t, TextBox.TextProperty)?.Path.Path == "ConfigPath");
